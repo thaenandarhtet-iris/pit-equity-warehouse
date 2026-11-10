@@ -88,3 +88,15 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** availability-rule and quarter-derivation edge cases are dbt unit tests (literal input rows into the real models); pytest runs `dbt build` on the committed fixtures and asserts real outcomes.
 - **Alternatives:** SPEC 8.2's pytest-only wording, which would mean building Parquet inputs per edge case or reimplementing the SQL in Python.
 - **Why:** the tests exercise the SQL that ships instead of a parallel implementation.
+
+## 2026-11-10: TTM requires four consecutive known quarters
+- **Decision:** `revenue_ttm` and `net_income_ttm` are null unless the four latest quarters known at `t` are consecutive (each starts the day after the previous ends).
+- **Why:** summing non-adjacent quarters would mix fiscal years silently; a null is countable.
+
+## 2026-11-10: CI fixtures for prices and universe use the same five companies
+- **Decision:** trimmed real Tiingo responses and real membership intervals for AAPL, MSFT, NVDA, KHC and TWTR.
+- **Why:** one slice runs through every layer offline, and TWTR exercises the delisted path end to end.
+
+## 2026-11-10: Shares outstanding from the cover page
+- **Decision:** market cap uses `dei:EntityCommonStockSharesOutstanding` as of its own date, per SPEC 6.2.
+- **Limitation:** multi-class filers report one count per class; only the mapped value is used, so market cap can be understated for them.
