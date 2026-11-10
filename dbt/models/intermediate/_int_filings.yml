@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: int_filings__availability
+    description: >
+      When each filing became usable. available_ts is the SEC acceptance time
+      (UTC); available_date is the first trading session whose 09:30 ET open is
+      strictly after it. See docs/decisions.md for why the rule is conservative.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, accession_number]
+    columns:
+      - name: available_ts
+        data_tests: [not_null]
+      - name: available_date
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_calendar__sessions')
+                field: session_date
+
+unit_tests:
+  - name: test_availability_rolls_to_the_next_open
+    model: int_filings__availability
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: 2023-06-30, market_open_utc: "2023-06-30 13:30:00"}
+          # Half day before the July 4 holiday.
+          - {session_date: 2023-07-03, market_open_utc: "2023-07-03 13:30:00"}
+          - {session_date: 2023-07-05, market_open_utc: "2023-07-05 13:30:00"}
+          - {session_date: 2023-07-06, market_open_utc: "2023-07-06 13:30:00"}
+          # Standard time, then daylight time from Sunday 2024-03-10.
+          - {session_date: 2024-03-08, market_open_utc: "2024-03-08 14:30:00"}
+          - {session_date: 2024-03-11, market_open_utc: "2024-03-11 13:30:00"}
+          - {session_date: 2024-03-12, market_open_utc: "2024-03-12 13:30:00"}
+      - input: ref('stg_sec__filings')
+        rows:
+          - {cik: 1, accession_number: after-close, form: 10-Q, accepted_at_utc: "2023-07-05 20:05:00"}
+          - {cik: 1, accession_number: pre-open, form: 10-Q, accepted_at_utc: "2023-07-06 12:00:00"}
+          - {cik: 1, accession_number: friday-after-close, form: 10-Q, accepted_at_utc: "2023-06-30 20:30:00"}
+          - {cik: 1, accession_number: holiday, form: 10-K, accepted_at_utc: "2023-07-03 18:00:00"}
+          - {cik: 1, accession_number: at-open, form: 10-Q, accepted_at_utc: "2024-03-11 13:30:00"}
+          - {cik: 1, accession_number: pre-open-standard-time, form: 10-Q, accepted_at_utc: "2024-03-08 14:00:00"}
+          - {cik: 1, accession_number: before-calendar, form: 10-K, accepted_at_utc: "2013-05-01 20:00:00"}
+    expect:
+      rows:
+        - {accession_number: after-close, available_date: 2023-07-06}
+        - {accession_number: pre-open, available_date: 2023-07-06}
+        - {accession_number: friday-after-close, available_date: 2023-07-03}
+        - {accession_number: holiday, available_date: 2023-07-05}
+        # The rule is "strictly after", so a filing stamped at the open waits a day.
+        - {accession_number: at-open, available_date: 2024-03-12}
+        - {accession_number: pre-open-standard-time, available_date: 2024-03-08}
+        # Known before the calendar starts, so usable from its first session.
+        - {accession_number: before-calendar, available_date: 2023-06-30}
