@@ -1,5 +1,55 @@
 version: 2
 
+models:
+  - name: int_facts__discrete_quarters
+    description: >
+      Quarter-length versions of revenue, net income and diluted EPS: reported
+      quarters plus quarters derived by subtracting year-to-date values. EPS is
+      never derived, so a company that reports only annual EPS has no Q4 EPS.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, metric, period_start, period_end, accession_number]
+    columns:
+      - name: value
+        data_tests: [not_null]
+      - name: available_date
+        data_tests: [not_null]
+      - name: derived_from
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ytd_6m, ytd_9m, fiscal_year]
+
+  - name: int_fundamentals__versions
+    description: >
+      Every version of every (company, metric, period) with its own
+      availability, numbered in acceptance order, and flagged as a restatement
+      when it differs from the first version by more than 1e-6 relative.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, metric, period_end, accession_number]
+    columns:
+      - name: version_number
+        data_tests: [not_null]
+      - name: is_restatement
+        data_tests: [not_null]
+
+  - name: int_fundamentals__snapshot_events
+    description: >
+      Point-in-time state per (company, metric) on each date a version became
+      available: the latest known period, at its latest version known by then.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, metric, event_date]
+    columns:
+      - name: value
+        data_tests: [not_null]
+      - name: event_date
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_discrete_quarters_from_ytd_and_annual_filings
     model: int_facts__discrete_quarters
@@ -28,3 +78,49 @@ unit_tests:
         - {metric: net_income, period_start: 2023-10-01, period_end: 2023-12-31, value: 160, is_derived: true, accession_number: fy23, available_ts: "2024-02-15 21:00:00"}
         - {metric: net_income, period_start: 2023-10-01, period_end: 2023-12-31, value: 170, is_derived: true, accession_number: fy24, available_ts: "2025-02-14 21:00:00"}
         - {metric: eps_diluted, period_start: 2023-01-01, period_end: 2023-03-31, value: 1.0, is_derived: false, accession_number: q1, available_ts: "2023-05-01 20:00:00"}
+
+  - name: test_restatement_is_flagged_against_the_first_version
+    model: int_fundamentals__versions
+    given:
+      - input: ref('int_facts__discrete_quarters')
+        rows:
+          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02, is_derived: false}
+          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150.0000001, accession_number: k1, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16, is_derived: false}
+          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 155, accession_number: k2, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18, is_derived: false}
+      - input: ref('int_facts__mapped')
+        rows:
+          - {cik: 1, metric: total_assets, duration_class: instant, period_start: null, period_end: 2023-09-30, value: 500, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {cik: 1, metric: net_income, duration_class: quarter, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+    expect:
+      rows:
+        - {metric: net_income, accession_number: q3, version_number: 1, is_restatement: false}
+        # Within the 1e-6 relative tolerance: a rounding difference, not a restatement.
+        - {metric: net_income, accession_number: k1, version_number: 2, is_restatement: false}
+        - {metric: net_income, accession_number: k2, version_number: 3, is_restatement: true}
+        - {metric: total_assets, accession_number: q3, version_number: 1, is_restatement: false}
+
+  - name: test_snapshot_never_regresses_to_an_older_period
+    model: int_fundamentals__snapshot_events
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: 2023-08-02, market_open_utc: "2023-08-02 13:30:00"}
+          - {session_date: 2023-11-02, market_open_utc: "2023-11-02 13:30:00"}
+          - {session_date: 2024-02-16, market_open_utc: "2024-02-16 14:30:00"}
+      - input: ref('int_fundamentals__versions')
+        rows:
+          - {cik: 1, metric: revenue, period_end: 2023-06-30, value: 10, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
+          - {cik: 1, metric: revenue, period_end: 2023-09-30, value: 11, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          # The 10-K repeats an older quarter as a comparative. A plain
+          # "latest filed" lookup would jump back to 2022-09-30 here.
+          - {cik: 1, metric: revenue, period_end: 2022-09-30, value: 99, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          - {cik: 1, metric: net_income, period_end: 2023-09-30, value: 5, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          # The same 10-K restates the latest quarter, which must replace it.
+          - {cik: 1, metric: net_income, period_end: 2023-09-30, value: 6, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+    expect:
+      rows:
+        - {metric: revenue, event_date: 2023-08-02, period_end: 2023-06-30, value: 10}
+        - {metric: revenue, event_date: 2023-11-02, period_end: 2023-09-30, value: 11}
+        - {metric: revenue, event_date: 2024-02-16, period_end: 2023-09-30, value: 11}
+        - {metric: net_income, event_date: 2023-11-02, period_end: 2023-09-30, value: 5}
+        - {metric: net_income, event_date: 2024-02-16, period_end: 2023-09-30, value: 6}
