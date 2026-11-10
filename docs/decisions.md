@@ -51,3 +51,21 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** `pitwh make-fixtures` keeps only concept-map tags in companyfacts and only the filings those facts cite in submissions (including overflow files), written under `tests/fixtures/sec/` with the same layout as `data/raw/sec/`.
 - **Alternatives:** hand-written synthetic JSON; committing the full responses (~21 MB).
 - **Why:** the landing code runs unchanged on fixtures, so CI exercises the real parser on real shapes; the trimmed set is under 1 MB.
+
+## 2026-11-10: Tiingo Starter (free) plan, throttled to 45 requests/hour
+- **Decision:** stay on the free plan; `TiingoClient` sends at most 45 requests/hour and passes the key in an `Authorization: Token` header.
+- **Alternatives:** Power plan ($30/month, 10,000 requests/hour); the `token=` query parameter.
+- **Why:** published Starter limits (tiingo.com/about/pricing, checked 2026-11-10) are 50 requests/hour, 1,000/day and 500 unique symbols/month, enough for ~200 symbols if fetched once and cached. Staying under 50 leaves room for a manual request. A query-string key would land in httpx's request logs.
+
+## 2026-11-10: Tiingo serves delisted names, but only the newest holder of a reused ticker
+- **Decision:** pick each security's price symbol by checking the row Tiingo actually serves (latest `startDate` in `supported_tickers.csv`) against the membership window; securities with no covering symbol are reported, not dropped silently.
+- **Evidence:** TWTR (ended 2022-10-28) and CELG (ended 2019-11-22) return full histories on the free plan. `supported_tickers.csv` has two DOW rows (Dow Chemical 1972-2017, Dow Inc 2019-), and a 2016 request for DOW returns `[]`. Renamed companies keep their whole history under the new ticker (META from 2012; FB is now an unrelated ETF).
+
+## 2026-11-10: Sample by CIK: 30 departed first, then 170 from the whole pool
+- **Decision:** seeded shuffle of departed tickers until 30 departed securities are in, then a seeded shuffle of all in-window tickers until 200 securities. A security is a CIK; it keeps every ticker it traded under.
+- **Alternatives:** 170 current members plus exactly 30 departed.
+- **Why:** 276 of 771 in-window tickers (36%) left the index; drawing from the whole pool keeps the sample's departed share close to reality, which is the point of a survivorship-bias-free universe.
+
+## 2026-11-10: A ticker-to-CIK match must be verified
+- **Decision:** order is `ticker_cik_overrides.csv`, then the SEC's current ticker map, then the Tiingo company name searched on EDGAR. Every automatic match must have filed a 10-K/10-Q during the membership interval (plus 120 days). A closed interval matched through the current map also needs a filing whose filename starts with the old ticker (`fb-20211231.htm`), or a matching company name. Unresolved intervals stop the build and are listed for hand-checked overrides.
+- **Why:** the current map silently mislabels reused tickers (DOW old vs new). Filenames separate renames from same-day index swaps: FB->META 29 of 30 periodic filings cite `fb-`, BK->BNY 23 of 46, while TWTR->ACGL and CBS->WRB cite 0. One-letter tickers need a separator after the ticker (`a201410-k.htm` is Arch Capital's, not Agilent's).
