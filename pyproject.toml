@@ -16,6 +16,9 @@ dependencies = [
     "typer>=0.29.0",
 ]
 
+[project.scripts]
+pitwh = "pitwh.cli:app"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

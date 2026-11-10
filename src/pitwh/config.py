@@ -14,6 +14,18 @@ FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 
 START_DATE = date(2015, 1, 1)
 
+# Phase 1 test companies, keyed on CIK because delisted names drop out of
+# company_tickers.json. Chosen to cover non-December fiscal years (AAPL Sep,
+# MSFT Jun, NVDA Jan), a restatement (KHC, 2019 restatement of 2015-2017),
+# and a delisted former member (TWTR, taken private 2022).
+SEC_TEST_CIKS = {
+    "AAPL": 320193,
+    "MSFT": 789019,
+    "NVDA": 1045810,
+    "KHC": 1637459,
+    "TWTR": 1418091,
+}
+
 # Changing the seed or sizes changes which securities are sampled, so every
 # downstream number in the README changes with it.
 UNIVERSE_SEED = 20261110
