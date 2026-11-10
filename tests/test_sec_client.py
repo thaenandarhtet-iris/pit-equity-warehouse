@@ -1,7 +1,8 @@
 import httpx
 import pytest
 
-from pitwh.sec import MAX_TRIES, SecClient, TokenBucket, fetch_cached
+from pitwh.client import MAX_TRIES, TokenBucket, fetch_cached
+from pitwh.sec import SecClient
 
 
 class FakeClock:

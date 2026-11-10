@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import random
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -14,6 +13,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from pitwh import config
+from pitwh.client import JsonClient, fetch_cached
 
 log = logging.getLogger(__name__)
 
@@ -21,43 +21,10 @@ TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/{name}"
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/{name}"
 
-RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
-MAX_TRIES = 5
 
+class SecClient(JsonClient):
+    """SEC fair-access client: identifying User-Agent, at most 8 requests per second."""
 
-class TokenBucket:
-    """Blocks until a request may be sent at no more than `rate` per second."""
-
-    # SEC allows 10 req/s. A bucket holding 8 tokens could send 8 at once and
-    # then 8 more within the same second, so capacity stays at 1.
-    def __init__(
-        self,
-        rate: float,
-        capacity: float = 1.0,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
-    ):
-        self.rate = rate
-        self.capacity = capacity
-        self.tokens = capacity
-        self.clock = clock
-        self.sleep = sleep
-        self.last = clock()
-
-    def _refill(self) -> None:
-        now = self.clock()
-        self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
-        self.last = now
-
-    def acquire(self) -> None:
-        self._refill()
-        if self.tokens < 1:
-            self.sleep((1 - self.tokens) / self.rate)
-            self._refill()
-        self.tokens -= 1
-
-
-class SecClient:
     def __init__(
         self,
         user_agent: str,
@@ -67,48 +34,20 @@ class SecClient:
     ):
         if not user_agent or "@" not in user_agent:
             raise ValueError("SEC_USER_AGENT must include a name and contact email")
-        self.http = httpx.Client(
-            headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
-            timeout=30.0,
+        super().__init__(
+            {"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
+            rate,
             transport=transport,
+            sleep=sleep,
         )
-        self.bucket = TokenBucket(rate, sleep=sleep)
-        self.sleep = sleep
 
     @classmethod
     def from_env(cls) -> "SecClient":
         return cls(os.environ.get("SEC_USER_AGENT", ""))
 
-    def get_json(self, url: str) -> dict:
-        for attempt in range(1, MAX_TRIES + 1):
-            self.bucket.acquire()
-            try:
-                resp = self.http.get(url)
-            except httpx.TransportError as exc:
-                log.warning("SEC %s transport error on try %d: %s", url, attempt, exc)
-            else:
-                if resp.status_code not in RETRY_STATUSES:
-                    resp.raise_for_status()
-                    return resp.json()
-                log.warning("SEC %s returned %d on try %d", url, resp.status_code, attempt)
-            if attempt < MAX_TRIES:
-                self.sleep(min(2**attempt, 60) * random.uniform(0.5, 1.0))
-        raise RuntimeError(f"SEC request failed after {MAX_TRIES} tries: {url}")
-
 
 def cik_name(cik: int) -> str:
     return f"CIK{cik:010d}.json"
-
-
-def fetch_cached(client: SecClient, url: str, path: Path, refresh: bool = False) -> dict:
-    if path.exists() and not refresh:
-        return json.loads(path.read_text())
-    data = client.get_json(url)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.replace(path)
-    return data
 
 
 def ingest_company_tickers(client: SecClient, raw_dir: Path, refresh: bool = False) -> dict:
