@@ -20,6 +20,27 @@ models:
       - name: trade_date
         data_tests: [not_null]
 
+  - name: dim_security
+    description: >
+      SCD2 on CIK (security_id). One row per interval [valid_from, valid_to)
+      over which the set of index tickers is unchanged.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, valid_from]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: cik
+      - name: valid_from
+        data_tests: [not_null]
+      - name: is_member
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_total_return_handles_splits_and_dividends
     description: >
@@ -49,3 +70,34 @@ unit_tests:
         - {security_id: 1, trade_date: "2020-01-03", daily_return: 0.25}
         - {security_id: 1, trade_date: "2020-01-06", daily_return: 0.125}
         - {security_id: 1, trade_date: "2020-01-13", daily_return: 0.125}
+
+  - name: test_dim_security_splits_history_at_every_change
+    description: >
+      CIK 1 is renamed (FB to META, contiguous because end dates are exclusive).
+      CIK 2 leaves the index and rejoins, then leaves for good. CIK 3 has two
+      share classes in the index at once.
+    model: dim_security
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {cik: 1, security_name: Meta, is_departed: false, price_symbol: META}
+          - {cik: 2, security_name: Gone, is_departed: true, price_symbol: null}
+          - {cik: 3, security_name: Alphabet, is_departed: false, price_symbol: GOOGL}
+      - input: ref('stg_universe__membership')
+        rows:
+          - {cik: 1, ticker: FB, start_date: "2013-12-23", end_date: "2022-06-09"}
+          - {cik: 1, ticker: META, start_date: "2022-06-09", end_date: null}
+          - {cik: 2, ticker: XYZ, start_date: "2015-03-02", end_date: "2017-01-03"}
+          - {cik: 2, ticker: XYZ, start_date: "2018-06-01", end_date: "2020-09-21"}
+          - {cik: 3, ticker: GOOGL, start_date: "2014-04-03", end_date: null}
+          - {cik: 3, ticker: GOOG, start_date: "2015-12-01", end_date: null}
+    expect:
+      rows:
+        - {security_id: 1, valid_from: "2013-12-23", valid_to: "2022-06-09", tickers: FB, is_member: true, is_current: false}
+        - {security_id: 1, valid_from: "2022-06-09", valid_to: null, tickers: META, is_member: true, is_current: true}
+        - {security_id: 2, valid_from: "2015-03-02", valid_to: "2017-01-03", tickers: XYZ, is_member: true, is_current: false}
+        - {security_id: 2, valid_from: "2017-01-03", valid_to: "2018-06-01", tickers: null, is_member: false, is_current: false}
+        - {security_id: 2, valid_from: "2018-06-01", valid_to: "2020-09-21", tickers: XYZ, is_member: true, is_current: false}
+        - {security_id: 2, valid_from: "2020-09-21", valid_to: null, tickers: null, is_member: false, is_current: true}
+        - {security_id: 3, valid_from: "2014-04-03", valid_to: "2015-12-01", tickers: GOOGL, is_member: true, is_current: false}
+        - {security_id: 3, valid_from: "2015-12-01", valid_to: null, tickers: "GOOG,GOOGL", is_member: true, is_current: true}

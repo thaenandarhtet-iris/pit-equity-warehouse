@@ -133,3 +133,4 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: `dim_security` is SCD2 on CIK, changing on ticker or membership
 - **Decision:** one row per CIK for each interval where its ticker and S&P 500 membership are unchanged, with `valid_from`/`valid_to`. A rename (FB to META) or leaving the index starts a new row.
 - **Why:** the point-in-time join needs to know which ticker and membership applied on a given date.
+- **Detail:** a CIK can have two share classes in the index at once (GOOG and GOOGL), so each row holds a sorted `tickers` list rather than one ticker. Rows outside the index have `is_member = false` and null tickers: tickers are only tracked while a member, and guessing one would be invented data. `assert_dim_security_intervals_tile` checks that the rows have no gaps, no overlaps and exactly one open row; it was itself checked against an overlap, a gap, two open rows and a closed last row.
