@@ -1,0 +1,30 @@
+version: 2
+
+unit_tests:
+  - name: test_discrete_quarters_from_ytd_and_annual_filings
+    model: int_facts__discrete_quarters
+    given:
+      - input: ref('int_facts__mapped')
+        rows:
+          # Q1 10-Q reports the quarter directly.
+          - {cik: 1, metric: net_income, duration_class: quarter, value: 100, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
+          # Q2 10-Q reports only six months year-to-date.
+          - {cik: 1, metric: net_income, duration_class: ytd_6m, value: 250, period_start: 2023-01-01, period_end: 2023-06-30, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
+          # Q3 10-Q reports both the quarter and nine months.
+          - {cik: 1, metric: net_income, duration_class: quarter, value: 150, period_start: 2023-07-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {cik: 1, metric: net_income, duration_class: ytd_9m, value: 400, period_start: 2023-01-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          # The 10-K has only the full year; Q4 must be derived.
+          - {cik: 1, metric: net_income, duration_class: fiscal_year, value: 560, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          # Next year's 10-K restates the 2023 full year as a comparative.
+          - {cik: 1, metric: net_income, duration_class: fiscal_year, value: 570, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy24, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18}
+          # EPS cannot be derived by subtraction; only the reported quarter survives.
+          - {cik: 1, metric: eps_diluted, duration_class: quarter, value: 1.0, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
+          - {cik: 1, metric: eps_diluted, duration_class: fiscal_year, value: 5.5, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+    expect:
+      rows:
+        - {metric: net_income, period_start: 2023-01-01, period_end: 2023-03-31, value: 100, is_derived: false, accession_number: q1, available_ts: "2023-05-01 20:00:00"}
+        - {metric: net_income, period_start: 2023-04-01, period_end: 2023-06-30, value: 150, is_derived: true, accession_number: q2, available_ts: "2023-08-01 20:00:00"}
+        - {metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, is_derived: false, accession_number: q3, available_ts: "2023-11-01 20:00:00"}
+        - {metric: net_income, period_start: 2023-10-01, period_end: 2023-12-31, value: 160, is_derived: true, accession_number: fy23, available_ts: "2024-02-15 21:00:00"}
+        - {metric: net_income, period_start: 2023-10-01, period_end: 2023-12-31, value: 170, is_derived: true, accession_number: fy24, available_ts: "2025-02-14 21:00:00"}
+        - {metric: eps_diluted, period_start: 2023-01-01, period_end: 2023-03-31, value: 1.0, is_derived: false, accession_number: q1, available_ts: "2023-05-01 20:00:00"}
