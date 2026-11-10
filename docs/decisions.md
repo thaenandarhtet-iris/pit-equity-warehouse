@@ -119,3 +119,17 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** on each date a version becomes available, take (1) the latest period with any version known by then, as a running max, then (2) the latest version of that period accepted before that session's open.
 - **Alternatives:** "most recently filed value", which is what a naive join does.
 - **Why:** a 10-K re-reports older periods as comparatives; the naive rule then jumps back to an old quarter. On the fixtures the naive rule goes backward at least once and the two-step rule never does (`assert_snapshot_never_goes_backward` plus the pytest end-to-end check).
+
+## 2026-11-10: Daily total return: `(close + div) * split / prev_close - 1`
+- **Decision:** `ret_t = (close_t + div_cash_t) * split_factor_t / close_{t-1} - 1`, using raw vendor fields only.
+- **Alternatives:** SPEC 6.6 as written, `(close_t * split_factor_t + div_t) / close_{t-1} - 1`.
+- **Why:** Tiingo quotes `divCash` per share as of that day, after any split that day, so the dividend must be scaled by the split too. The two only differ when a split and a dividend fall on the same day. To be confirmed on AAPL 2020-08-31 (4:1) and NVDA 2024-06-10 (10:1), and by the reconciliation test.
+
+## 2026-11-10: Reconcile daily, not cumulatively, at 1e-4
+- **Decision:** compare each day's return with the ratio of Tiingo's consecutive `adjClose` values. A day off by more than 1e-4 fails the test, and every mismatch is kept in a model the README counts.
+- **Alternatives:** compound over the whole history and compare at the end.
+- **Why:** over 11 years compounding adds up Tiingo's rounding into false failures and hides which day is wrong. Daily comparison names the day.
+
+## 2026-11-10: `dim_security` is SCD2 on CIK, changing on ticker or membership
+- **Decision:** one row per CIK for each interval where its ticker and S&P 500 membership are unchanged, with `valid_from`/`valid_to`. A rename (FB to META) or leaving the index starts a new row.
+- **Why:** the point-in-time join needs to know which ticker and membership applied on a given date.
