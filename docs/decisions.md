@@ -69,3 +69,12 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: A ticker-to-CIK match must be verified
 - **Decision:** order is `ticker_cik_overrides.csv`, then the SEC's current ticker map, then the Tiingo company name searched on EDGAR. Every automatic match must have filed a 10-K/10-Q during the membership interval (plus 120 days). A closed interval matched through the current map also needs a filing whose filename starts with the old ticker (`fb-20211231.htm`), or a matching company name. Unresolved intervals stop the build and are listed for hand-checked overrides.
 - **Why:** the current map silently mislabels reused tickers (DOW old vs new). Filenames separate renames from same-day index swaps: FB->META 29 of 30 periodic filings cite `fb-`, BK->BNY 23 of 46, while TWTR->ACGL and CBS->WRB cite 0. One-letter tickers need a separator after the ticker (`a201410-k.htm` is Arch Capital's, not Agilent's).
+
+## 2026-11-10: Unpriceable securities stay in the universe
+- **Decision:** a sampled security with no Tiingo coverage keeps its membership and fundamentals, has null returns, and is counted in the README limitations.
+- **Alternatives:** drop it; replace it with the next draw.
+- **Why:** both alternatives remove exactly the names survivorship bias hides.
+
+## 2026-11-10: Universe window ends at the last membership snapshot
+- **Decision:** `fct_universe_daily` stops at the last date in the S&P 500 history file (2026-08-18 in the pinned version), even though prices run later.
+- **Why:** membership after the last snapshot is unknown; carrying it forward would assume no index changes since.
