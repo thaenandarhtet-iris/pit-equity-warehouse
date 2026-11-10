@@ -46,3 +46,27 @@ models:
         data_tests: [unique, not_null]
       - name: market_open_utc
         data_tests: [not_null]
+
+  - name: stg_universe__membership
+    description: Index membership intervals per sampled security; a renamed company has one row per ticker.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, ticker, start_date]
+    columns:
+      - name: cik
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: cik
+      - name: start_date
+        data_tests: [not_null]
+
+  - name: stg_universe__securities
+    columns:
+      - name: cik
+        data_tests: [unique, not_null]
+      - name: is_departed
+        data_tests: [not_null]
