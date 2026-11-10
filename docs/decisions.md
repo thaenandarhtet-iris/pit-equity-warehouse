@@ -78,3 +78,13 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: Universe window ends at the last membership snapshot
 - **Decision:** `fct_universe_daily` stops at the last date in the S&P 500 history file (2026-08-18 in the pinned version), even though prices run later.
 - **Why:** membership after the last snapshot is unknown; carrying it forward would assume no index changes since.
+
+## 2026-11-10: Best XBRL tag is chosen per filing, not per period (deviates from SPEC 6.2)
+- **Decision:** within each filing, a (company, metric, period) takes the highest-priority tag that filing used. Each filing is its own version.
+- **Alternatives:** SPEC 6.2 as written: best tag per (company, metric, period) across all filings.
+- **Why:** filers change tags over time and re-report old periods under the new tag (AAPL: `SalesRevenueNet` through 2018, then `RevenueFromContractWithCustomerExcludingAssessedTax` in comparatives). Choosing across all filings would discard the original version and date the period to a later filing, which breaks the point-in-time history.
+
+## 2026-11-10: SQL logic is tested with dbt unit tests plus a pytest end-to-end build
+- **Decision:** availability-rule and quarter-derivation edge cases are dbt unit tests (literal input rows into the real models); pytest runs `dbt build` on the committed fixtures and asserts real outcomes.
+- **Alternatives:** SPEC 8.2's pytest-only wording, which would mean building Parquet inputs per edge case or reimplementing the SQL in Python.
+- **Why:** the tests exercise the SQL that ships instead of a parallel implementation.
