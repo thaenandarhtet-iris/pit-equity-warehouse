@@ -18,7 +18,8 @@ def land_fixtures(out_dir: Path, fixtures_dir: Path = config.FIXTURES_DIR) -> di
                 df[col] = pd.to_datetime(df[col]).dt.date
         df.to_parquet(out_dir / f"{name}.parquet", index=False)
         counts[name] = len(df)
-    prices_dir = fixtures_dir / "tiingo" / "prices"
-    if prices_dir.exists():
-        counts["prices_daily"] = prices.land_prices(prices_dir, out_dir / "prices_daily.parquet")
+    # An absent price fixture lands an empty table, so dbt still builds offline.
+    counts["prices_daily"] = prices.land_prices(
+        fixtures_dir / "tiingo" / "prices", out_dir / "prices_daily.parquet"
+    )
     return counts

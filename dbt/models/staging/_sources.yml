@@ -22,3 +22,10 @@ sources:
         description: One row per (security, ticker interval) in the sample, from build-universe.
       - name: universe_securities
         description: One row per sampled security (CIK) with its Tiingo price symbol.
+
+  - name: tiingo
+    meta:
+      external_location: "{{ env_var('PARQUET_DIR') }}/{name}.parquet"
+    tables:
+      - name: prices_daily
+        description: One row per (Tiingo symbol, session) with raw OHLCV, dividend and split factor.

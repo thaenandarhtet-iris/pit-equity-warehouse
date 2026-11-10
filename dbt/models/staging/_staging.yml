@@ -70,3 +70,28 @@ models:
         data_tests: [unique, not_null]
       - name: is_departed
         data_tests: [not_null]
+
+  - name: stg_prices__daily
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [price_symbol, trade_date]
+    columns:
+      - name: close
+        data_tests:
+          - not_null
+          - column_satisfies:
+              arguments:
+                condition: "> 0"
+      - name: split_factor
+        data_tests:
+          - not_null
+          - column_satisfies:
+              arguments:
+                condition: "> 0"
+      - name: div_cash
+        data_tests:
+          - not_null
+          - column_satisfies:
+              arguments:
+                condition: ">= 0"
