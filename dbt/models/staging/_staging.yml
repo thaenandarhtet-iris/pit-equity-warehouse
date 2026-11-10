@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_sec__facts
+    description: XBRL facts for concept-map tags, renamed and typed. One row per fact as reported in one filing.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, taxonomy, tag, unit, period_start, period_end, accession_number, frame]
+    columns:
+      - name: cik
+        data_tests: [not_null]
+      - name: accession_number
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_sec__filings')
+                field: accession_number
+      - name: period_end
+        data_tests: [not_null]
+      - name: value
+        data_tests: [not_null]
+
+  - name: stg_sec__filings
+    description: One row per (company, filing). The same accession can belong to several co-registrant CIKs.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, accession_number]
+    columns:
+      - name: accession_number
+        data_tests: [not_null]
+      - name: accepted_at_utc
+        data_tests: [not_null]
+
+  - name: stg_sec__companies
+    columns:
+      - name: cik
+        data_tests: [unique, not_null]
+
+  - name: stg_calendar__sessions
+    description: XNYS sessions with open and close in UTC, from exchange_calendars.
+    columns:
+      - name: session_date
+        data_tests: [unique, not_null]
+      - name: market_open_utc
+        data_tests: [not_null]
