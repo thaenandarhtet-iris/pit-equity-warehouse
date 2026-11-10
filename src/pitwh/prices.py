@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 PRICES_URL = "https://api.tiingo.com/tiingo/daily/{symbol}/prices"
 META_URL = "https://api.tiingo.com/tiingo/daily/{symbol}"
+SUPPORTED_URL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
 
 # Starter plan: 50 requests per hour. Staying a little under leaves room for
 # a manual request without tripping the hourly limit mid-run.
@@ -55,6 +56,27 @@ def tiingo_symbol(ticker: str) -> str:
 def fetch_meta(client: TiingoClient, symbol: str, raw_dir: Path, refresh: bool = False) -> dict:
     url = META_URL.format(symbol=symbol)
     return fetch_cached(client, url, raw_dir / "meta" / f"{symbol}.json", refresh)
+
+
+def fetch_meta_name(client: TiingoClient, symbol: str, raw_dir: Path) -> str | None:
+    try:
+        return fetch_meta(client, symbol, raw_dir).get("name")
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 404:
+            raise
+        return None
+
+
+def supported_tickers(raw_dir: Path, refresh: bool = False) -> pd.DataFrame:
+    """Tiingo's coverage list (one row per ticker per company), US-dollar stocks only."""
+    path = raw_dir / "supported_tickers.zip"
+    if refresh or not path.exists():
+        resp = httpx.get(SUPPORTED_URL, timeout=60.0)
+        resp.raise_for_status()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(resp.content)
+    df = pd.read_csv(path, keep_default_na=False)
+    return df[(df["assetType"] == "Stock") & (df["priceCurrency"] == "USD")]
 
 
 def ingest_prices(

@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/{name}"
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/{name}"
+SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
 
 
 class SecClient(JsonClient):
@@ -54,7 +56,7 @@ def ingest_company_tickers(client: SecClient, raw_dir: Path, refresh: bool = Fal
     return fetch_cached(client, TICKERS_URL, raw_dir / "company_tickers.json", refresh)
 
 
-def ingest_company(client: SecClient, cik: int, raw_dir: Path, refresh: bool = False) -> None:
+def ingest_submissions(client: SecClient, cik: int, raw_dir: Path, refresh: bool = False) -> dict:
     name = cik_name(cik)
     subs_dir = raw_dir / "submissions"
     subs = fetch_cached(client, SUBMISSIONS_URL.format(name=name), subs_dir / name, refresh)
@@ -62,7 +64,46 @@ def ingest_company(client: SecClient, cik: int, raw_dir: Path, refresh: bool = F
     for extra in subs.get("filings", {}).get("files", []):
         fname = extra["name"]
         fetch_cached(client, SUBMISSIONS_URL.format(name=fname), subs_dir / fname, refresh)
+    return subs
 
+
+def periodic_filings(raw_dir: Path, cik: int) -> tuple[str, pd.DataFrame]:
+    """Company name and every filing (date, form, primary document) from the cache."""
+    subs_dir = raw_dir / "submissions"
+    doc = json.loads((subs_dir / cik_name(cik)).read_text())
+    blocks = [doc["filings"]["recent"]] + [
+        json.loads((subs_dir / f["name"]).read_text()) for f in doc["filings"].get("files", [])
+    ]
+    df = pd.concat(
+        pd.DataFrame(
+            {
+                "filing_date": b["filingDate"],
+                "form": b["form"],
+                "primary_document": b["primaryDocument"],
+            }
+        )
+        for b in blocks
+    )
+    df["filing_date"] = pd.to_datetime(df["filing_date"]).dt.date
+    return doc.get("name", ""), df.reset_index(drop=True)
+
+
+def search_entities(client: SecClient, query: str, raw_dir: Path) -> list[tuple[int, str]]:
+    """EDGAR company-name search: (cik, entity name) for the top matches."""
+    slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")
+    doc = fetch_cached(
+        client, SEARCH_URL, raw_dir / "search" / f"{slug}.json", params={"keysTyped": query}
+    )
+    # Entity strings carry the ticker list in parentheses: "CELGENE CORP /DE/ (CELG)".
+    return [
+        (int(h["_id"]), re.sub(r"\s*\(.*\)$", "", h["_source"]["entity"]))
+        for h in doc.get("hits", {}).get("hits", [])
+    ]
+
+
+def ingest_company(client: SecClient, cik: int, raw_dir: Path, refresh: bool = False) -> None:
+    ingest_submissions(client, cik, raw_dir, refresh)
+    name = cik_name(cik)
     try:
         fetch_cached(
             client, COMPANYFACTS_URL.format(name=name), raw_dir / "companyfacts" / name, refresh
