@@ -1,8 +1,18 @@
 from datetime import date
 
 import pandas as pd
+import pytest
 
-from pitwh.universe import in_window, membership_intervals
+from pitwh.universe import (
+    UnresolvedTickers,
+    filed_during,
+    filenames_cite,
+    in_window,
+    membership_intervals,
+    names_match,
+    price_coverage,
+    select_universe,
+)
 
 SNAPSHOTS = pd.DataFrame(
     {
@@ -34,3 +44,114 @@ def test_window_drops_names_gone_before_start():
     tickers = set(in_window(_intervals(), date(2015, 1, 1)).ticker)
     assert "OLD" not in tickers
     assert {"AAA", "BBB", "CCC"} <= tickers
+
+
+def _filings(rows):
+    return pd.DataFrame(rows, columns=["filing_date", "form", "primary_document"]).assign(
+        filing_date=lambda d: pd.to_datetime(d.filing_date).dt.date
+    )
+
+
+# Dow Inc (CIK 1751788) took the DOW ticker in 2019; Dow Chemical held it until 2017.
+DOW_INC = _filings(
+    [("2019-05-02", "10-Q", "dow-20190331.htm"), ("2020-02-07", "10-K", "dow-10k.htm")]
+)
+# Meta's 10-Ks were filed as fb-*.htm while the ticker was FB.
+META = _filings(
+    [("2021-02-04", "10-K", "fb-20201231.htm"), ("2022-02-03", "10-K", "fb-20211231.htm")]
+)
+# Arch Capital replaced Twitter in the index the day Twitter left; different company.
+ARCH = _filings(
+    [("2022-02-25", "10-K", "acgl-20211231.htm"), ("2015-02-27", "10-K", "a201410-k.htm")]
+)
+
+
+def test_reused_ticker_fails_the_filing_window():
+    assert not filed_during(DOW_INC, date(1996, 1, 2), date(2017, 8, 31))
+    assert filed_during(DOW_INC, date(2019, 4, 2), None)
+
+
+def test_filenames_link_old_ticker_to_renamed_company():
+    assert filenames_cite(META, "FB", date(2013, 12, 23), date(2022, 6, 9))
+    assert not filenames_cite(ARCH, "TWTR", date(2013, 12, 23), date(2022, 11, 1))
+
+
+def test_single_letter_ticker_needs_a_separator():
+    # "a201410-k.htm" is Arch Capital's file, not Agilent's (ticker A).
+    assert not filenames_cite(ARCH, "A", date(2014, 1, 1), date(2016, 1, 1))
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "same"),
+    [
+        ("Celgene Corp", "CELGENE CORP /DE/", True),
+        ("Twitter Inc", "Twitter, Inc.", True),
+        ("Twitter Inc", "ARCH CAPITAL GROUP LTD.", False),
+        ("The Kraft Heinz Company", "Kraft Heinz Co", True),
+    ],
+)
+def test_company_names_match_after_dropping_legal_suffixes(a, b, same):
+    assert names_match(a, b) is same
+
+
+POOL = pd.DataFrame(
+    [
+        # Departed names; OLDB is the former ticker of current member NEWB.
+        ("GONE1", date(2010, 1, 4), date(2018, 3, 1)),
+        ("GONE2", date(2016, 5, 2), date(2021, 9, 1)),
+        ("OLDB", date(2012, 1, 3), date(2020, 6, 1)),
+        ("NEWB", date(2020, 6, 1), None),
+        ("CUR1", date(2001, 1, 2), None),
+        ("CUR2", date(2005, 1, 3), None),
+        ("CUR3", date(2017, 1, 3), None),
+    ],
+    columns=["ticker", "start_date", "end_date"],
+)
+CIKS = {"GONE1": 1, "GONE2": 2, "OLDB": 3, "NEWB": 3, "CUR1": 4, "CUR2": 5, "CUR3": 6}
+
+
+def _resolve(ticker, start, end):
+    return CIKS[ticker]
+
+
+def _same(ticker, start, end, cik):
+    return CIKS[ticker] == cik
+
+
+def test_selection_is_reproducible_and_meets_departed_floor():
+    a = select_universe(POOL, _resolve, _same, seed=7, size=4, min_departed=2)
+    b = select_universe(POOL, _resolve, _same, seed=7, size=4, min_departed=2)
+    pd.testing.assert_frame_equal(a, b)
+    assert a.cik.nunique() == 4
+    open_ciks = set(a[a.end_date.isna()].cik)
+    assert len(set(a.cik) - open_ciks) >= 2
+
+
+def test_renamed_company_carries_both_tickers():
+    sel = select_universe(POOL, _resolve, _same, seed=7, size=6, min_departed=2)
+    assert set(sel[sel.cik == 3].ticker) == {"OLDB", "NEWB"}
+
+
+def test_unresolved_ticker_fails_loudly():
+    def resolve(ticker, start, end):
+        return None if ticker == "GONE2" else CIKS[ticker]
+
+    with pytest.raises(UnresolvedTickers, match="GONE2"):
+        select_universe(POOL, resolve, _same, seed=7, size=6, min_departed=2)
+
+
+SUPPORTED = pd.DataFrame(
+    [
+        ("DOW", "1972-06-01", "2017-08-31"),
+        ("DOW", "2019-03-20", "2026-11-09"),
+        ("TWTR", "2013-11-07", "2022-10-28"),
+    ],
+    columns=["ticker", "startDate", "endDate"],
+)
+
+
+def test_price_coverage_uses_the_row_tiingo_actually_serves():
+    # Tiingo serves the newest company behind a reused ticker.
+    assert not price_coverage(SUPPORTED, "DOW", date(2015, 1, 2), date(2017, 8, 31))
+    assert price_coverage(SUPPORTED, "DOW", date(2019, 4, 2), None, today=date(2026, 11, 9))
+    assert price_coverage(SUPPORTED, "TWTR", date(2015, 1, 2), date(2022, 10, 28))
