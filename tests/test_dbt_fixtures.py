@@ -6,7 +6,8 @@ import duckdb
 import pytest
 from dbt.cli.main import dbtRunner
 
-from pitwh import config, sec
+from pitwh import config
+from pitwh.fixtures import land_fixtures
 
 AAPL, KHC = 320193, 1637459
 
@@ -15,7 +16,8 @@ AAPL, KHC = 320193, 1637459
 def warehouse(tmp_path_factory, monkeypatch_module):
     root = tmp_path_factory.mktemp("warehouse")
     parquet = root / "parquet"
-    sec.land_all(raw_dir=config.FIXTURES_DIR / "sec", out_dir=parquet)
+    parquet.mkdir()
+    land_fixtures(parquet)
     monkeypatch_module.setenv("DUCKDB_PATH", str(root / "pitwh.duckdb"))
     monkeypatch_module.setenv("PARQUET_DIR", str(parquet))
     args = ["--project-dir", str(config.DBT_DIR), "--profiles-dir", str(config.DBT_DIR)]

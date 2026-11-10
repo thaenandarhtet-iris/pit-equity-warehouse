@@ -365,3 +365,22 @@ def fetch_snapshots(path: Path = config.RAW_DIR / "universe" / "historical.csv")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(resp.content)
     return path
+
+
+def fixture_tables(
+    pool: pd.DataFrame, ciks: dict[str, int], names: dict[int, str]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Membership and securities rows for a fixed ticker->CIK set (offline CI fixtures).
+
+    Same columns as build-universe writes, so the dbt sources read either.
+    """
+    members = pool[pool["ticker"].isin(ciks)].assign(
+        cik=lambda d: d["ticker"].map(ciks), resolution="fixture"
+    )[["cik", "ticker", "start_date", "end_date", "resolution"]]
+    securities = (
+        members.groupby("cik")
+        .agg(is_departed=("end_date", lambda s: bool(s.notna().all())), ticker=("ticker", "last"))
+        .reset_index()
+        .assign(name=lambda d: d["cik"].map(names), price_symbol=lambda d: d["ticker"])
+    )[["cik", "name", "is_departed", "price_symbol"]]
+    return members.reset_index(drop=True), securities

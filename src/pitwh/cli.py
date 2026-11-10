@@ -7,7 +7,7 @@ import pandas as pd
 import typer
 from dotenv import load_dotenv
 
-from pitwh import calendar, config, prices, sec, universe
+from pitwh import calendar, config, fixtures, prices, sec, universe
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -49,11 +49,22 @@ def make_fixtures() -> None:
     sec.trim_fixtures(config.RAW_DIR / "sec", out, config.SEEDS_DIR / "concept_map.csv")
     typer.echo(f"wrote fixtures to {out}")
 
+    pool = universe.in_window(
+        universe.membership_intervals(universe.load_snapshots(universe.fetch_snapshots()))
+    )
+    names = {cik: sec.periodic_filings(out, cik)[0] for cik in config.SEC_TEST_CIKS.values()}
+    members, securities = universe.fixture_tables(pool, config.SEC_TEST_CIKS, names)
+    uni = config.FIXTURES_DIR / "universe"
+    uni.mkdir(parents=True, exist_ok=True)
+    members.to_csv(uni / "universe_membership.csv", index=False)
+    securities.to_csv(uni / "universe_securities.csv", index=False)
+    typer.echo(f"wrote {len(members)} membership rows to {uni}")
+
 
 @app.command("land-fixtures")
 def land_fixtures() -> None:
     """Land the committed fixtures into PARQUET_DIR so dbt runs offline (CI)."""
-    counts = sec.land_all(raw_dir=config.FIXTURES_DIR / "sec", out_dir=config.parquet_dir())
+    counts = fixtures.land_fixtures(config.parquet_dir())
     for table, n in counts.items():
         typer.echo(f"{table}: {n} rows")
 
