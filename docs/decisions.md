@@ -100,3 +100,22 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: Shares outstanding from the cover page
 - **Decision:** market cap uses `dei:EntityCommonStockSharesOutstanding` as of its own date, per SPEC 6.2.
 - **Limitation:** multi-class filers report one count per class; only the mapped value is used, so market cap can be understated for them.
+
+## 2026-11-10: Availability rule: first session opening strictly after acceptance
+- **Decision:** `available_ts` is the SEC `acceptanceDateTime` (UTC). `available_date` is the first XNYS session whose open is strictly after `available_ts`, found with `ASOF JOIN ... on accepted < market_open`.
+- **Alternatives:** the filing date (a calendar date, no time, so an after-close filing would look tradeable that day); the next calendar day (wrong across weekends and holidays).
+- **Why:** a filing accepted at 16:05 ET is unknown at that day's close, so a strategy trading on closes can't use it until the next session. Strictly after also handles a filing accepted at exactly 09:30:00 ET: it's not tradeable at that open. Covered by 7 dbt unit tests (pre-open, intraday, after close, Friday night, holiday, half day, exactly at the open).
+
+## 2026-11-10: Derived quarters use the prior cumulative as known at the later filing
+- **Decision:** a missing quarter is cumulative minus the previous cumulative (Q4 = FY - 9M). The previous value is the latest version accepted no later than the later filing (ASOF). If none exists yet, the first version is used. The derived version is available at the later of its two inputs. A directly reported quarter known no later replaces the derived one. EPS is never derived.
+- **Alternatives:** subtract the latest restated prior value (uses information from the future); derive EPS too.
+- **Why:** this keeps each derived value something an analyst could have computed on that day. EPS isn't additive because share counts change between quarters.
+
+## 2026-11-10: Every filing is a version; restatement means a different value from the first
+- **Decision:** `int_fundamentals__versions` keeps every filing's value for each (company, metric, period). `is_restatement` is true when the value differs from the first version by more than 1e-6 relative.
+- **Why:** repeats of the same number in later comparatives are not restatements, and floating-point rounding shouldn't create false ones. KHC Q1 2017 net income: 893M first (2017-05-05), restated to 883M (2019-06-10), and that is the only flagged version.
+
+## 2026-11-10: Snapshot events in two steps
+- **Decision:** on each date a version becomes available, take (1) the latest period with any version known by then, as a running max, then (2) the latest version of that period accepted before that session's open.
+- **Alternatives:** "most recently filed value", which is what a naive join does.
+- **Why:** a 10-K re-reports older periods as comparatives; the naive rule then jumps back to an old quarter. On the fixtures the naive rule goes backward at least once and the two-step rule never does (`assert_snapshot_never_goes_backward` plus the pytest end-to-end check).
