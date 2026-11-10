@@ -50,6 +50,14 @@ def make_fixtures() -> None:
     typer.echo(f"wrote fixtures to {out}")
 
 
+@app.command("land-fixtures")
+def land_fixtures() -> None:
+    """Land the committed fixtures into PARQUET_DIR so dbt runs offline (CI)."""
+    counts = sec.land_all(raw_dir=config.FIXTURES_DIR / "sec", out_dir=config.parquet_dir())
+    for table, n in counts.items():
+        typer.echo(f"{table}: {n} rows")
+
+
 @app.command("build-universe")
 def build_universe() -> None:
     """Sample the S&P 500 history, resolve every ticker interval to a CIK, write Parquet."""

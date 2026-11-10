@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DUCKDB_PATH: ${{ github.workspace }}/data/pitwh.duckdb
+      PARQUET_DIR: ${{ github.workspace }}/data/parquet
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +27,4 @@ jobs:
         run: uv run pytest
 
       - name: dbt seed and build (offline fixtures)
-        run: |
-          mkdir -p data
-          uv run dbt seed --project-dir dbt --profiles-dir dbt
-          uv run dbt build --project-dir dbt --profiles-dir dbt
+        run: make build-fixtures
