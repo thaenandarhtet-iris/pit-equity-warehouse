@@ -18,3 +18,12 @@ models:
       +materialized: table
     marts:
       +materialized: table
+
+vars:
+  # The universe window. The end is the last date in the pinned S&P 500
+  # history file (universe.SP500_COMMIT); membership after it is unknown.
+  universe_start: "2015-01-01"
+  universe_end: "2026-08-18"
+  # SPEC: at least 30 sampled securities leave the index in the window. The
+  # five-company CI fixture has one (TWTR) and overrides this to 1.
+  min_departed_securities: 30

@@ -41,6 +41,23 @@ models:
       - name: is_member
         data_tests: [not_null]
 
+  - name: fct_universe_daily
+    description: One row per (trade_date, security_id) for index members, departed names included.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [trade_date, security_id]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: cik
+      - name: trade_date
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_total_return_handles_splits_and_dividends
     description: >
@@ -101,3 +118,39 @@ unit_tests:
         - {security_id: 2, valid_from: "2020-09-21", valid_to: null, tickers: null, is_member: false, is_current: true}
         - {security_id: 3, valid_from: "2014-04-03", valid_to: "2015-12-01", tickers: GOOGL, is_member: true, is_current: false}
         - {security_id: 3, valid_from: "2015-12-01", valid_to: null, tickers: "GOOG,GOOGL", is_member: true, is_current: true}
+
+  - name: test_universe_grid_has_members_only_inside_the_window
+    description: >
+      Security 2 leaves on 2020-01-07 (exclusive) and is back from 2020-01-09;
+      the window ends 2020-01-09. Weekend sessions don't exist in the calendar.
+    model: fct_universe_daily
+    overrides:
+      vars:
+        universe_start: "2020-01-03"
+        universe_end: "2020-01-09"
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: "2020-01-02"}
+          - {session_date: "2020-01-03"}
+          - {session_date: "2020-01-06"}
+          - {session_date: "2020-01-07"}
+          - {session_date: "2020-01-08"}
+          - {session_date: "2020-01-09"}
+          - {session_date: "2020-01-10"}
+      - input: ref('dim_security')
+        rows:
+          - {security_id: 1, valid_from: "2019-01-02", valid_to: null, tickers: AAA, is_member: true}
+          - {security_id: 2, valid_from: "2019-01-02", valid_to: "2020-01-07", tickers: BBB, is_member: true}
+          - {security_id: 2, valid_from: "2020-01-07", valid_to: "2020-01-09", tickers: null, is_member: false}
+          - {security_id: 2, valid_from: "2020-01-09", valid_to: null, tickers: BBB, is_member: true}
+    expect:
+      rows:
+        - {trade_date: "2020-01-03", security_id: 1}
+        - {trade_date: "2020-01-06", security_id: 1}
+        - {trade_date: "2020-01-07", security_id: 1}
+        - {trade_date: "2020-01-08", security_id: 1}
+        - {trade_date: "2020-01-09", security_id: 1}
+        - {trade_date: "2020-01-03", security_id: 2}
+        - {trade_date: "2020-01-06", security_id: 2}
+        - {trade_date: "2020-01-09", security_id: 2}
