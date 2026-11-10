@@ -19,3 +19,8 @@ START_DATE = date(2015, 1, 1)
 UNIVERSE_SEED = 20261110
 UNIVERSE_SIZE = 200
 MIN_DEPARTED_SECURITIES = 30
+
+# The calendar starts before START_DATE so filings accepted late in 2014 still
+# map to a session, and runs past today so recent filings can roll forward.
+CALENDAR_START = date(2014, 1, 1)
+CALENDAR_END = date(2027, 6, 30)
