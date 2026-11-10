@@ -16,13 +16,13 @@ ingest:
 	@echo "ingest is implemented in Phases 1-2" >&2; exit 1
 
 build: setup
-	$(DBT) seed $(DBT_ARGS)
+	$(DBT) seed --full-refresh $(DBT_ARGS)
 	$(DBT) build $(DBT_ARGS)
 
 build-fixtures: setup
 	mkdir -p data/fixtures
 	$(FIXTURE_ENV) uv run pitwh land-fixtures
-	$(FIXTURE_ENV) $(DBT) seed $(DBT_ARGS)
+	$(FIXTURE_ENV) $(DBT) seed --full-refresh $(DBT_ARGS)
 	$(FIXTURE_ENV) $(DBT) build $(DBT_ARGS)
 
 lint:

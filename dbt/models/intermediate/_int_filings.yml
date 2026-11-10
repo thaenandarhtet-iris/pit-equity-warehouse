@@ -21,6 +21,35 @@ models:
                 to: ref('stg_calendar__sessions')
                 field: session_date
 
+  - name: int_facts__mapped
+    description: >
+      Facts for concept-map metrics, one row per (company, metric, period,
+      filing), using the best tag within that filing. Durations are classified
+      as quarter, 6- or 9-month year-to-date, or fiscal year.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, metric, period_start, period_end, accession_number]
+    columns:
+      - name: metric
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [revenue, net_income, eps_diluted, total_assets, total_liabilities, stockholders_equity, shares_outstanding]
+      - name: period_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [duration, instant]
+      - name: duration_class
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [instant, quarter, ytd_6m, ytd_9m, fiscal_year]
+      - name: available_date
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_availability_rolls_to_the_next_open
     model: int_filings__availability
@@ -56,3 +85,32 @@ unit_tests:
         - {accession_number: pre-open-standard-time, available_date: 2024-03-08}
         # Known before the calendar starts, so usable from its first session.
         - {accession_number: before-calendar, available_date: 2023-06-30}
+
+  - name: test_best_tag_is_chosen_within_each_filing
+    model: int_facts__mapped
+    given:
+      - input: ref('concept_map')
+        rows:
+          - {metric: revenue, taxonomy: us-gaap, tag: Revenues, priority: 1, period_type: duration, unit: USD}
+          - {metric: revenue, taxonomy: us-gaap, tag: SalesRevenueNet, priority: 3, period_type: duration, unit: USD}
+          - {metric: total_assets, taxonomy: us-gaap, tag: Assets, priority: 1, period_type: instant, unit: USD}
+      - input: ref('int_filings__availability')
+        rows:
+          - {cik: 1, accession_number: q3-10q, available_ts: "2017-11-01 20:00:00", available_date: 2017-11-02}
+          - {cik: 1, accession_number: fy18-10k, available_ts: "2018-11-02 20:00:00", available_date: 2018-11-05}
+      - input: ref('stg_sec__facts')
+        rows:
+          # The original 10-Q tags the quarter both ways; the higher priority wins.
+          - {cik: 1, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 100, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+          - {cik: 1, taxonomy: us-gaap, tag: SalesRevenueNet, unit: USD, value: 99, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+          # A later filing re-reports the quarter under a lower-priority tag. It is a
+          # separate version and must not replace the original.
+          - {cik: 1, taxonomy: us-gaap, tag: SalesRevenueNet, unit: USD, value: 101, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: fy18-10k, form: 10-K}
+          # Wrong unit for the metric: dropped.
+          - {cik: 1, taxonomy: us-gaap, tag: Revenues, unit: EUR, value: 90, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: fy18-10k, form: 10-K}
+          - {cik: 1, taxonomy: us-gaap, tag: Assets, unit: USD, value: 500, period_start: null, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+    expect:
+      rows:
+        - {metric: revenue, tag: Revenues, value: 100, accession_number: q3-10q, duration_class: quarter}
+        - {metric: revenue, tag: SalesRevenueNet, value: 101, accession_number: fy18-10k, duration_class: quarter}
+        - {metric: total_assets, tag: Assets, value: 500, accession_number: q3-10q, duration_class: instant}
