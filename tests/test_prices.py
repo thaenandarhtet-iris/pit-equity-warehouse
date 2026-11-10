@@ -7,7 +7,9 @@ import pytest
 
 from pitwh.prices import TiingoClient, land_prices, tiingo_symbol
 
-# Shape copied from a live response for AAPL around its 4:1 split on 2020-08-31.
+# Tiingo's response shape for AAPL around its 4:1 split on 2020-08-31. The split
+# day's close, adjClose and splitFactor match a live response; the other prices
+# are illustrative.
 AAPL_ROWS = [
     {
         "date": "2020-08-28T00:00:00.000Z",
