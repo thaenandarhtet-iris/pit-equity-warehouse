@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: fct_prices_daily
+    description: >
+      Raw close and a daily total return computed only from that day's and the
+      previous session's raw fields. security_id is the CIK.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, trade_date]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: cik
+      - name: trade_date
+        data_tests: [not_null]
+
+unit_tests:
+  - name: test_total_return_handles_splits_and_dividends
+    description: >
+      Prices are chosen so every return is exact in binary floating point. The
+      last row has a 4:1 split and a dividend on the same day; SPEC's literal
+      formula (close * split + div) / prev_close would give about 0.1165 there.
+      BBB is not a sampled security, so it is dropped.
+    model: fct_prices_daily
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {cik: 1, price_symbol: AAA}
+      - input: ref('stg_prices__daily')
+        rows:
+          # First session: no previous close, so no return.
+          - {price_symbol: AAA, trade_date: "2020-01-02", close: 64, div_cash: 0, split_factor: 1}
+          # 64 -> 80.
+          - {price_symbol: AAA, trade_date: "2020-01-03", close: 80, div_cash: 0, split_factor: 1}
+          # Ex-dividend: (88 + 2) / 80.
+          - {price_symbol: AAA, trade_date: "2020-01-06", close: 88, div_cash: 2, split_factor: 1}
+          # After a gap: 4:1 split plus 0.25 per new share, (24.5 + 0.25) * 4 / 88.
+          - {price_symbol: AAA, trade_date: "2020-01-13", close: 24.5, div_cash: 0.25, split_factor: 4}
+          - {price_symbol: BBB, trade_date: "2020-01-02", close: 10, div_cash: 0, split_factor: 1}
+    expect:
+      rows:
+        - {security_id: 1, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 1, trade_date: "2020-01-03", daily_return: 0.25}
+        - {security_id: 1, trade_date: "2020-01-06", daily_return: 0.125}
+        - {security_id: 1, trade_date: "2020-01-13", daily_return: 0.125}
