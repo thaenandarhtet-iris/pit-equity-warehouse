@@ -14,8 +14,13 @@ setup:
 	uv sync --locked
 	mkdir -p data/raw data/parquet
 
-ingest:
-	@echo "ingest is implemented in Phases 1-2" >&2; exit 1
+# Needs SEC_USER_AGENT and TIINGO_API_KEY in .env. Downloads are cached in
+# data/raw, so a rerun only fetches what is missing. The Tiingo starter plan
+# allows 50 requests an hour, so a first full price download takes ~4 hours.
+ingest: setup
+	uv run pitwh build-universe
+	uv run pitwh ingest-prices
+	uv run pitwh ingest-sec --sample
 
 build: setup
 	$(DBT) seed --full-refresh $(DBT_ARGS)
@@ -33,8 +38,10 @@ lint:
 test: lint
 	uv run pytest
 
-bench:
-	@echo "bench is implemented in Phase 5" >&2; exit 1
+# Rebuilds the database from scratch (the build is one of the timings), then
+# rewrites bench/results/latest.json and the README benchmark block.
+bench: setup
+	uv run python bench/run_benchmarks.py
 
 all: ingest build test bench
 
