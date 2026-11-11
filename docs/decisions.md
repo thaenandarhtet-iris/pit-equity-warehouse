@@ -130,9 +130,9 @@ Short log of non-obvious choices. Newest at the bottom.
 
 | day | ours | SPEC's literal formula | vendor |
 |---|---|---|---|
-| J 2025-05-16 (Amentum spin-off) | 2.3206% | 2.3104% | 2.3206% |
+| J 2025-05-16 | 2.3206% | 2.3104% | 2.3206% |
 | DD 2019-06-03 (1:3 reverse split, Corteva spin-off) | 12.5707% | 71.4823% | 12.5707% |
-| JEF 2019-09-27 (Spectrum Brands distribution) | 3.9482% | 3.5135% | 3.9482% |
+| JEF 2019-09-27 | 3.9482% | 3.5135% | 3.9482% |
 
 ## 2026-11-10: Reconcile daily, not cumulatively, at 1e-4
 - **Decision:** compare each day's return with the ratio of Tiingo's consecutive `adjClose` values. A day off by more than 1e-4 fails the test, and every mismatch is kept in a model the README counts.
