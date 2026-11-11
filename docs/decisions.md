@@ -134,3 +134,11 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** one row per CIK for each interval where its ticker and S&P 500 membership are unchanged, with `valid_from`/`valid_to`. A rename (FB to META) or leaving the index starts a new row.
 - **Why:** the point-in-time join needs to know which ticker and membership applied on a given date.
 - **Detail:** a CIK can have two share classes in the index at once (GOOG and GOOGL), so each row holds a sorted `tickers` list rather than one ticker. Rows outside the index have `is_member = false` and null tickers: tickers are only tracked while a member, and guessing one would be invented data. `assert_dim_security_intervals_tile` checks that the rows have no gaps, no overlaps and exactly one open row; it was itself checked against an overlap, a gap, two open rows and a closed last row.
+
+## 2026-11-10: The naive model keys on period_end and takes the latest version
+- **Decision:** `fct_features_daily_naive` treats each value as known on its fiscal `period_end` and always uses the most recently filed version. Everything else (grid, TTM rule, ratios) is shared with the PIT model through the `daily_features` macro, so the two differ only in the leak.
+- **Why:** that's the usual shortcut, and it leaks twice: the filing lag, and restated values back-filled to the original date. `assert_naive_model_leaks` fails if the look-ahead check finds nothing in it, which is what makes `assert_no_lookahead` passing meaningful.
+
+## 2026-11-10: Debt-to-equity is not nulled for negative equity
+- **Decision:** `debt_to_equity = total_liabilities / stockholders_equity`, null only when equity is zero. P/E and P/B are null when the denominator is not positive, as SPEC 6.7 says.
+- **Why:** SPEC states the null rule for P/E and P/B but not D/E. A negative D/E is a real signal (negative book equity) rather than a divide-by-zero, so it is kept; users can filter it.
