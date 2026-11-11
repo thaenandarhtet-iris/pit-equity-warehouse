@@ -1,6 +1,9 @@
 -- One row per (security, metric, period, filing). The best tag is picked within
 -- each filing, not across filings: filers re-tag old periods in later
 -- comparatives, and choosing across filings would discard the original version.
+-- A period is its end date and duration class: a filing can tag the same
+-- quarter in a second context with a shifted start (J.B. Hunt's Q2 2013, 87
+-- days, rounded), and the full span is the period as reported.
 with facts as (
     select
         a.security_id,
@@ -47,8 +50,8 @@ from (
     select
         *,
         row_number() over (
-            partition by security_id, metric, period_start, period_end, accession_number
-            order by priority, tag
+            partition by security_id, metric, duration_class, period_end, accession_number
+            order by priority, duration_days desc, tag
         ) as rn
     from classified
     where duration_class is not null

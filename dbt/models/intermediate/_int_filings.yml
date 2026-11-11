@@ -146,3 +146,26 @@ unit_tests:
         - {metric: revenue, tag: Revenues, value: 100, accession_number: q3-10q, duration_class: quarter}
         - {metric: revenue, tag: SalesRevenueNet, value: 101, accession_number: fy18-10k, duration_class: quarter}
         - {metric: total_assets, tag: Assets, value: 500, accession_number: q3-10q, duration_class: instant}
+
+  - name: test_a_period_reported_in_two_contexts_keeps_the_full_span
+    model: int_facts__mapped
+    description: >
+      J.B. Hunt's 10-Q of 2014-07-29 tags Q2 2013 revenue twice: 1,382,858,000
+      for 2013-04-01 to 2013-06-30 and a rounded 1,383,000,000 for a context
+      starting 2013-04-04. One quarter gets one value per filing: the full span.
+    given:
+      - input: ref('concept_map')
+        rows:
+          - {metric: revenue, taxonomy: us-gaap, tag: Revenues, priority: 1, period_type: duration, unit: USD}
+      - input: ref('int_filings__availability')
+        rows:
+          - {security_id: 728535, cik: 728535, accession_number: 0001437749-14-013566, available_ts: "2014-07-29 18:00:07", available_date: 2014-07-30}
+      - input: ref('stg_sec__facts')
+        rows:
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 1383000000, period_start: 2013-04-04, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 1382858000, period_start: 2013-04-01, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 2674444000, period_start: 2013-01-01, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+    expect:
+      rows:
+        - {period_start: 2013-04-01, value: 1382858000, duration_class: quarter}
+        - {period_start: 2013-01-01, value: 2674444000, duration_class: ytd_6m}
