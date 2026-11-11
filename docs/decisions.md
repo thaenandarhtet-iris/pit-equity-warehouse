@@ -125,7 +125,14 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: Daily total return: `(close + div) * split / prev_close - 1`
 - **Decision:** `ret_t = (close_t + div_cash_t) * split_factor_t / close_{t-1} - 1`, using raw vendor fields only.
 - **Alternatives:** SPEC 6.6 as written, `(close_t * split_factor_t + div_t) / close_{t-1} - 1`.
-- **Why:** Tiingo quotes `divCash` per share as of that day, after any split that day, so the dividend must be scaled by the split too. The two only differ when a split and a dividend fall on the same day. To be confirmed on AAPL 2020-08-31 (4:1) and NVDA 2024-06-10 (10:1), and by the reconciliation test.
+- **Why:** Tiingo quotes `divCash` per share as of that day, after any split that day, so the dividend must be scaled by the split too. The two only differ when a split and a dividend fall on the same day.
+- **Confirmed (2026-11-11):** on AAPL 2020-08-31 (4:1) and NVDA 2024-06-10 (10:1), multiplying the day's close by `splitFactor` matches the vendor's `adjClose` return to about 1e-13, so `splitFactor` is applied on the ex-date. The downloaded data has three days with a split factor and a dividend together, and on all three our formula matches the vendor exactly while SPEC's does not:
+
+| day | ours | SPEC's literal formula | vendor |
+|---|---|---|---|
+| J 2025-05-16 (Amentum spin-off) | 2.3206% | 2.3104% | 2.3206% |
+| DD 2019-06-03 (1:3 reverse split, Corteva spin-off) | 12.5707% | 71.4823% | 12.5707% |
+| JEF 2019-09-27 (Spectrum Brands distribution) | 3.9482% | 3.5135% | 3.9482% |
 
 ## 2026-11-10: Reconcile daily, not cumulatively, at 1e-4
 - **Decision:** compare each day's return with the ratio of Tiingo's consecutive `adjClose` values. A day off by more than 1e-4 fails the test, and every mismatch is kept in a model the README counts.
