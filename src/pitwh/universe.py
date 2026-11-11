@@ -287,14 +287,16 @@ class Resolver:
         self._filings: dict[int, tuple[str, pd.DataFrame]] = {}
 
     def filings(self, cik: int) -> tuple[str, pd.DataFrame]:
+        if cik in self.non_sec_names:
+            # Never filed with the SEC, so no filing can link another ticker to it.
+            empty = pd.DataFrame(columns=["filing_date", "form", "primary_document"])
+            return self.non_sec_names[cik], empty
         if cik not in self._filings:
             sec.ingest_submissions(self.sec_client, cik, self.sec_raw)
             self._filings[cik] = sec.periodic_filings(self.sec_raw, cik)
         return self._filings[cik]
 
     def name(self, cik: int) -> str:
-        if cik in self.non_sec_names:
-            return self.non_sec_names[cik]
         return self.filings(cik)[0]
 
     def _hit(self, key: tuple[str, date], cik: int, method: str) -> int:
