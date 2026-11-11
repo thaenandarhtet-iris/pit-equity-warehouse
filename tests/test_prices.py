@@ -86,3 +86,25 @@ def test_land_prices_keeps_raw_close_split_and_dividend(tmp_path):
     assert split_day.split_factor == 4.0
     assert split_day.adj_close == 125.07
     assert set(df.columns) >= {"open", "high", "low", "volume", "div_cash"}
+
+
+def test_trimmed_fixture_lands_the_same_as_the_raw_response(tmp_path):
+    from pitwh.prices import trim_price_fixtures
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    early = dict(AAPL_ROWS[0], date="2014-11-28T00:00:00.000Z")
+    (raw / "AAPL.json").write_text(json.dumps([early, *AAPL_ROWS]))
+    out = tmp_path / "fixtures"
+
+    trim_price_fixtures(raw, out, ["AAPL"], start="2014-12-01")
+
+    assert len(json.loads((out / "AAPL.json").read_text())) == 2
+    assert "adjHigh" not in json.loads((out / "AAPL.json").read_text())[0]
+    land_prices(raw, tmp_path / "raw.parquet")
+    land_prices(out, tmp_path / "trimmed.parquet")
+    full = pd.read_parquet(tmp_path / "raw.parquet")
+    trimmed = pd.read_parquet(tmp_path / "trimmed.parquet")
+    pd.testing.assert_frame_equal(
+        full[full.trade_date >= date(2014, 12, 1)].reset_index(drop=True), trimmed
+    )

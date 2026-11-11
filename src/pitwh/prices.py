@@ -128,6 +128,23 @@ COLUMNS = {
 }
 
 
+def trim_price_fixtures(
+    raw_dir: Path, out_dir: Path, symbols: Iterable[str], start: str = PRICE_START
+) -> None:
+    """Copy real Tiingo responses for `symbols` into fixtures, keeping only landed fields.
+
+    Same layout as the raw cache, so land_prices reads either.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    keep = ["date", *COLUMNS]
+    for symbol in symbols:
+        rows = json.loads((raw_dir / f"{symbol}.json").read_text())
+        rows = [{k: r[k] for k in keep} for r in rows if r["date"][:10] >= start]
+        # One row per line keeps fixture diffs readable.
+        body = ",\n".join(json.dumps(r, separators=(",", ":")) for r in rows)
+        (out_dir / f"{symbol}.json").write_text(f"[\n{body}\n]\n")
+
+
 def land_prices(raw_dir: Path, out: Path) -> int:
     frames = []
     for path in sorted(raw_dir.glob("*.json")):

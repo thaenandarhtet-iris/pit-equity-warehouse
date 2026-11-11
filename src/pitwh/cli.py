@@ -61,6 +61,11 @@ def make_fixtures() -> None:
     filers.to_csv(uni / "universe_filers.csv", index=False)
     typer.echo(f"wrote {len(members)} membership rows to {uni}")
 
+    symbols = [prices.tiingo_symbol(t) for t in config.SEC_TEST_CIKS]
+    price_out = config.FIXTURES_DIR / "tiingo" / "prices"
+    prices.trim_price_fixtures(config.RAW_DIR / "tiingo" / "prices", price_out, symbols)
+    typer.echo(f"wrote {len(symbols)} price histories to {price_out}")
+
 
 @app.command("land-fixtures")
 def land_fixtures() -> None:
@@ -117,11 +122,17 @@ def build_universe() -> None:
 
 @app.command("ingest-prices")
 def ingest_prices(
+    symbol: Annotated[
+        list[str] | None, typer.Option(help="Tiingo symbol to fetch instead of the sample")
+    ] = None,
     refresh: Annotated[bool, typer.Option(help="Re-download even if cached")] = False,
 ) -> None:
     """Fetch Tiingo daily prices for every sampled security with coverage, then land Parquet."""
-    securities = pd.read_parquet(config.PARQUET_DIR / "universe_securities.parquet")
-    symbols = sorted(securities.price_symbol.dropna().unique())
+    if symbol:
+        symbols = sorted(symbol)
+    else:
+        securities = pd.read_parquet(config.PARQUET_DIR / "universe_securities.parquet")
+        symbols = sorted(securities.price_symbol.dropna().unique())
     missing = prices.ingest_prices(
         prices.TiingoClient.from_env(), symbols, config.RAW_DIR / "tiingo", refresh
     )
