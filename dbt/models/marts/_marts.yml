@@ -79,6 +79,17 @@ models:
           arguments:
             columns: [trade_date, security_id]
 
+  - name: rpt_leakage_summary
+    description: Naive vs PIT per metric, the leakage numbers for SPEC section 9 and the README.
+    columns:
+      - name: metric
+        data_tests: [unique, not_null]
+      - name: lookahead_rows
+        data_tests:
+          - column_satisfies:
+              arguments:
+                condition: ">= 0"
+
 unit_tests:
   - name: test_total_return_handles_splits_and_dividends
     description: >
