@@ -276,6 +276,11 @@ class Resolver:
         self.overrides = {
             (r.ticker, r.start_date.date()): int(r.cik) for r in ov.itertuples(index=False)
         }
+        # A negative ID marks a security that never filed with the SEC (e.g. a
+        # bank that filed with the FDIC); its name comes from the override row.
+        self.non_sec_names = {
+            int(r.cik): r.name for r in ov.itertuples(index=False) if int(r.cik) < 0
+        }
         tickers = sec.ingest_company_tickers(sec_client, sec_raw)
         self.sec_map = {v["ticker"].replace("-", "."): int(v["cik_str"]) for v in tickers.values()}
         self.method: dict[tuple[str, date], str] = {}
@@ -286,6 +291,11 @@ class Resolver:
             sec.ingest_submissions(self.sec_client, cik, self.sec_raw)
             self._filings[cik] = sec.periodic_filings(self.sec_raw, cik)
         return self._filings[cik]
+
+    def name(self, cik: int) -> str:
+        if cik in self.non_sec_names:
+            return self.non_sec_names[cik]
+        return self.filings(cik)[0]
 
     def _hit(self, key: tuple[str, date], cik: int, method: str) -> int:
         self.method[key] = method
@@ -354,7 +364,7 @@ def securities_table(
             ),
             None,
         )
-        rows.append((cik, resolver.filings(cik)[0], is_departed, symbol))
+        rows.append((cik, resolver.name(cik), is_departed, symbol))
     return pd.DataFrame(rows, columns=["cik", "name", "is_departed", "price_symbol"])
 
 

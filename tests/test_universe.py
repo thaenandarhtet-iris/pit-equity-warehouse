@@ -11,6 +11,7 @@ from pitwh.universe import (
     membership_intervals,
     names_match,
     price_coverage,
+    securities_table,
     select_universe,
 )
 
@@ -155,3 +156,30 @@ def test_price_coverage_uses_the_row_tiingo_actually_serves():
     assert not price_coverage(SUPPORTED, "DOW", date(2015, 1, 2), date(2017, 8, 31))
     assert price_coverage(SUPPORTED, "DOW", date(2019, 4, 2), None, today=date(2026, 11, 9))
     assert price_coverage(SUPPORTED, "TWTR", date(2015, 1, 2), date(2022, 10, 28))
+
+
+class _NamesOnly:
+    """Resolver stand-in: names come from overrides or SEC filings by CIK."""
+
+    sec_map: dict[str, int] = {}
+
+    def name(self, cik):
+        return {-1: "Signature Bank", 320193: "Apple Inc."}[cik]
+
+
+def test_non_sec_filer_keeps_its_override_name():
+    # Signature Bank filed with the FDIC, so it has a made-up negative ID and
+    # no SEC filings to read a name from.
+    members = pd.DataFrame(
+        {
+            "cik": [-1, 320193],
+            "ticker": ["SBNY", "AAPL"],
+            "start_date": [date(2021, 12, 20), date(1996, 1, 2)],
+            "end_date": [date(2023, 3, 15), None],
+        }
+    )
+    securities = securities_table(members, _NamesOnly(), SUPPORTED)
+    assert securities.set_index("cik").name.to_dict() == {
+        -1: "Signature Bank",
+        320193: "Apple Inc.",
+    }

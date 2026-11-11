@@ -142,3 +142,9 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: Debt-to-equity is not nulled for negative equity
 - **Decision:** `debt_to_equity = total_liabilities / stockholders_equity`, null only when equity is zero. P/E and P/B are null when the denominator is not positive, as SPEC 6.7 says.
 - **Why:** SPEC states the null rule for P/E and P/B but not D/E. A negative D/E is a real signal (negative book equity) rather than a divide-by-zero, so it is kept; users can filter it.
+
+## 2026-11-10: 50 ticker intervals resolved by hand; Signature Bank kept without an SEC CIK
+- **Decision:** 49 intervals the automatic resolver couldn't match are in `ticker_cik_overrides.csv`, each checked against EDGAR submissions (periodic filings inside the interval, plus the SEC current or former name and, for most, filenames that cite the ticker). Signature Bank (SBNY) has ID -1: it filed with the FDIC, not the SEC, so it stays in the universe with membership and prices but no fundamentals.
+- **Why they failed automatically:** most are reused tickers. Tiingo's metadata names the ticker's current holder (FB is now an ETF, GPS another company), so the name search finds the wrong company or nothing.
+- **Two intervals span two filers:** MYL is assigned to Mylan N.V. (1623613) from its first filing on 2015-02-27; Jan-Feb 2015 belonged to Mylan Inc (69499). BHGE is assigned to the listed Baker Hughes parent (1701605), which also holds BKR; 2015 to mid-2017 belonged to Baker Hughes Inc (808362, now a subsidiary LLC). Both gaps have null fundamentals.
+- **Alternatives for SBNY:** drop non-SEC filers and draw a replacement. Rejected by the owner: a failed bank is exactly what survivorship bias hides.
