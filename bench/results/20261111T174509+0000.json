@@ -1,0 +1,224 @@
+{
+  "generated_at": "2026-11-11T17:45:09+00:00",
+  "machine": {
+    "cpu": "Apple M4",
+    "cores": 10,
+    "ram_gb": 24.0,
+    "os": "Darwin 27.0.0 (arm64)",
+    "python": "3.12.16",
+    "duckdb": "2.0.0"
+  },
+  "universe": {
+    "start": "2015-01-01",
+    "end": "2026-08-18"
+  },
+  "build": {
+    "seed_seconds": 2.8,
+    "build_seconds": 32.2,
+    "total_seconds": 35.0,
+    "node_statuses": {
+      "success": 25,
+      "pass": 95
+    }
+  },
+  "asof": [
+    {
+      "securities": 50,
+      "grid_rows": 735784,
+      "seconds": {
+        "asof_join": 0.0433,
+        "correlated_subquery": 0.2267,
+        "window_last_value": 0.0629
+      },
+      "output_rows": 735784,
+      "matched_rows": 673974
+    },
+    {
+      "securities": 100,
+      "grid_rows": 1319045,
+      "seconds": {
+        "asof_join": 0.0922,
+        "correlated_subquery": 0.5256,
+        "window_last_value": 0.1239
+      },
+      "output_rows": 1319045,
+      "matched_rows": 1209709
+    },
+    {
+      "securities": 200,
+      "grid_rows": 2575160,
+      "seconds": {
+        "asof_join": 0.2132,
+        "correlated_subquery": 0.8916,
+        "window_last_value": 0.1892
+      },
+      "output_rows": 2575160,
+      "matched_rows": 2360328
+    }
+  ],
+  "leakage": {
+    "naive_rows": 2400359,
+    "leaky_rows": 1606270,
+    "pct_leaky": 66.92,
+    "lookahead_rows": 1605869,
+    "median_lookahead_days": 373.0,
+    "p90_lookahead_days": 668.0,
+    "differs_rows": 938885,
+    "pct_differs": 39.11,
+    "restated_versions": 9006,
+    "derived_quarter_versions": 6796,
+    "fundamental_versions": 164389,
+    "per_metric": [
+      {
+        "metric": "eps_diluted",
+        "naive_rows": 367512,
+        "leaky_rows": 341271,
+        "pct_leaky": 92.86,
+        "lookahead_rows": 341271,
+        "median_lookahead_days": 365.0,
+        "p90_lookahead_days": 600.0,
+        "restated_versions": 1072,
+        "derived_quarter_versions": 0
+      },
+      {
+        "metric": "net_income_ttm",
+        "naive_rows": 345362,
+        "leaky_rows": 314009,
+        "pct_leaky": 90.92,
+        "lookahead_rows": 313977,
+        "median_lookahead_days": 491.0,
+        "p90_lookahead_days": 735.0,
+        "restated_versions": 1592,
+        "derived_quarter_versions": 3560
+      },
+      {
+        "metric": "revenue_ttm",
+        "naive_rows": 341191,
+        "leaky_rows": 330171,
+        "pct_leaky": 96.77,
+        "lookahead_rows": 330171,
+        "median_lookahead_days": 481.0,
+        "p90_lookahead_days": 697.0,
+        "restated_versions": 2991,
+        "derived_quarter_versions": 3236
+      },
+      {
+        "metric": "shares_outstanding",
+        "naive_rows": 359632,
+        "leaky_rows": 50009,
+        "pct_leaky": 13.91,
+        "lookahead_rows": 50009,
+        "median_lookahead_days": 8.0,
+        "p90_lookahead_days": 28.0,
+        "restated_versions": 19,
+        "derived_quarter_versions": 0
+      },
+      {
+        "metric": "stockholders_equity",
+        "naive_rows": 352404,
+        "leaky_rows": 227548,
+        "pct_leaky": 64.57,
+        "lookahead_rows": 227425,
+        "median_lookahead_days": 356.0,
+        "p90_lookahead_days": 735.0,
+        "restated_versions": 1025,
+        "derived_quarter_versions": 0
+      },
+      {
+        "metric": "total_assets",
+        "naive_rows": 371343,
+        "leaky_rows": 208305,
+        "pct_leaky": 56.1,
+        "lookahead_rows": 208182,
+        "median_lookahead_days": 287.0,
+        "p90_lookahead_days": 415.0,
+        "restated_versions": 1506,
+        "derived_quarter_versions": 0
+      },
+      {
+        "metric": "total_liabilities",
+        "naive_rows": 262915,
+        "leaky_rows": 134957,
+        "pct_leaky": 51.33,
+        "lookahead_rows": 134834,
+        "median_lookahead_days": 130.0,
+        "p90_lookahead_days": 398.0,
+        "restated_versions": 801,
+        "derived_quarter_versions": 0
+      }
+    ]
+  },
+  "volume": {
+    "mart_rows": {
+      "dim_security": 308,
+      "fct_universe_daily": 371937,
+      "fct_prices_daily": 478552,
+      "fct_features_daily": 371937,
+      "fct_features_daily_naive": 371937,
+      "rpt_leakage_summary": 7
+    },
+    "tag_fallbacks": [
+      {
+        "metric": "eps_diluted",
+        "facts": 46167,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      },
+      {
+        "metric": "net_income",
+        "facts": 44283,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      },
+      {
+        "metric": "revenue",
+        "facts": 43734,
+        "fallback_facts": 19254,
+        "pct_fallback": 44.0,
+        "fallback_tags": "RevenueFromContractWithCustomerExcludingAssessedTax, SalesRevenueNet"
+      },
+      {
+        "metric": "shares_outstanding",
+        "facts": 10561,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      },
+      {
+        "metric": "stockholders_equity",
+        "facts": 27644,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      },
+      {
+        "metric": "total_assets",
+        "facts": 24864,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      },
+      {
+        "metric": "total_liabilities",
+        "facts": 15296,
+        "fallback_facts": 0,
+        "pct_fallback": 0.0,
+        "fallback_tags": null
+      }
+    ],
+    "securities": 203,
+    "departed_securities": 89,
+    "priced_securities": 181,
+    "reconciled_returns": 478371,
+    "reviewed_vendor_exceptions": 1,
+    "raw_cache_mb": 1274.9,
+    "duckdb_file_mb": 97.0
+  },
+  "tests": {
+    "dbt_data_tests": 82,
+    "dbt_unit_tests": 13,
+    "pytest_tests": 55
+  }
+}
