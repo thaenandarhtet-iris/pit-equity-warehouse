@@ -66,6 +66,7 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** seeded shuffle of departed tickers until 30 departed securities are in, then a seeded shuffle of all in-window tickers until 200 securities. A security is a CIK; it keeps every ticker it traded under.
 - **Alternatives:** 170 current members plus exactly 30 departed.
 - **Why:** 276 of 771 in-window tickers (36%) left the index; drawing from the whole pool keeps the sample's departed share close to reality, which is the point of a survivorship-bias-free universe.
+- **Renames are linked both ways (fix, same day):** the first version only followed a same-day handoff backward (from a ticker to the one it replaced) or to the company's current ticker. A rename into a ticker that later left the index was missed, which ended L Brands at LB (2021) instead of BBWI (2024) and Paramount at VIAC (2022) instead of PARA (2025).
 
 ## 2026-11-10: A ticker-to-CIK match must be verified
 - **Decision:** order is `ticker_cik_overrides.csv`, then the SEC's current ticker map, then the Tiingo company name searched on EDGAR. Every automatic match must have filed a 10-K/10-Q during the membership interval (plus 120 days). A closed interval matched through the current map also needs a filing whose filename starts with the old ticker (`fb-20211231.htm`), or a matching company name. Unresolved intervals stop the build and are listed for hand-checked overrides.

@@ -210,8 +210,13 @@ def select_universe(
         grew = True
         while grew:
             grew = False
+            # A same-day handoff in either direction: an earlier ticker ending
+            # when one of ours starts, or a later one starting when ours ends
+            # (VIAC renamed PARA, which itself later left the index).
             starts = {pool.at[i, "start_date"] for i in rows}
-            for j in pool.index[pool["end_date"].isin(starts)]:
+            ends = {pool.at[i, "end_date"] for i in rows} - {None}
+            handoffs = pool["end_date"].isin(starts) | pool["start_date"].isin(ends)
+            for j in pool.index[handoffs]:
                 if j in rows or cik_by_row.get(j, c) != c:
                     continue
                 r = pool.loc[j]

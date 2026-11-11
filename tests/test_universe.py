@@ -135,6 +135,30 @@ def test_renamed_company_carries_both_tickers():
     assert set(sel[sel.cik == 3].ticker) == {"OLDB", "NEWB"}
 
 
+def test_rename_into_a_ticker_that_later_left_is_one_security():
+    # VIAC was renamed PARA in 2022 and PARA left the index in 2025. Whichever
+    # ticker is drawn first, the security must carry both intervals.
+    pool = pd.DataFrame(
+        [
+            ("VIAC", date(2019, 12, 5), date(2022, 2, 17)),
+            ("PARA", date(2022, 2, 17), date(2025, 8, 8)),
+            ("CUR1", date(2001, 1, 2), None),
+        ],
+        columns=["ticker", "start_date", "end_date"],
+    )
+    ciks = {"VIAC": 9, "PARA": 9, "CUR1": 4}
+    for seed in range(10):
+        sel = select_universe(
+            pool,
+            lambda t, s, e: ciks[t],
+            lambda t, s, e, c: ciks[t] == c,
+            seed=seed,
+            size=1,
+            min_departed=1,
+        )
+        assert set(sel[sel.cik == 9].ticker) == {"VIAC", "PARA"}, seed
+
+
 def test_unresolved_ticker_fails_loudly():
     def resolve(ticker, start, end):
         return None if ticker == "GONE2" else CIKS[ticker]
