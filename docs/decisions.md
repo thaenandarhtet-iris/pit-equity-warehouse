@@ -174,3 +174,25 @@ Short log of non-obvious choices. Newest at the bottom.
 ## 2026-11-10: The sample is 203 securities
 - **Decision:** keep the 200 seeded draws plus the 3 merged-away predecessors split out of them (old DuPont, Baker Hughes Inc, 21st Century Fox), rather than re-drawing to exactly 200.
 - **Why:** re-drawing would change the seeded sample to hit a round number; the split-out securities are real former index members.
+
+## 2026-11-11: Reviewed vendor-side reconciliation exceptions live in a seed
+- **Decision:** `reconciliation_exceptions.csv` lists (security, day) mismatches traced to the vendor, each with its evidence. `assert_returns_reconcile_to_vendor` skips listed rows only, so any new mismatch still fails the build. The README shows the count. One row today: AT&T 2026-10-09.
+- **Alternatives:** widen the tolerance; make the test a warning; leave the build failing.
+- **Why:** a wider tolerance or a warning would hide the next real bug (the DD shared-symbol bug was 55 rows), and a build that always fails stops being a gate.
+
+## 2026-11-11: A quarter tagged in two contexts in one filing keeps the full span
+- **Decision:** `int_facts__mapped` keeps one fact per (security, metric, duration class, period end, filing): the highest-priority tag, then the longest span.
+- **Alternatives:** key on period start as before; keep the most precise value.
+- **Why:** the full build found 4 duplicate versions. Companyfacts drops XBRL dimensions, so one filing can tag the same quarter twice with shifted starts. J.B. Hunt's 10-Q of 2014-07-29 gives Q2 2013 revenue as 1,382,858,000 (2013-04-01 to 06-30) and a rounded 1,383,000,000 (from 04-04). Nordstrom and Williams-Sonoma repeat equal values with starts a day or two apart. The full span is the fiscal period the filing reports. Unit-tested on the J.B. Hunt case.
+
+## 2026-11-11: Benchmark subsets are prefixes of one seeded order
+- **Decision:** the 50/100/200-security subsets are prefixes of the 203 security IDs, sorted and then shuffled with `UNIVERSE_SEED`, so each subset contains the smaller ones.
+- **Alternatives:** independent draws per size; the sampler's own draw order. The sampler doesn't record order, and the 3 split-out predecessors were never drawn.
+- **Why:** with nested subsets, timing differences come from size, not from which companies were picked.
+
+## 2026-11-11: Leakage is reported two ways
+- **Decision:** the headline follows SPEC: a naive row leaks if its value differs from PIT *or* it cites a filing not yet public. The README also shows the stricter share where the value itself differs.
+- **Why:** the naive model takes the latest version of each period, which is often next year's 10-K comparative repeating an unchanged number. That row cites the future without changing the value. Showing both stops the headline from being read as inflated.
+
+## 2026-11-11: The correlated subquery is decorrelated by DuckDB
+- **Finding:** the correlated subquery takes 4-6x as long as `ASOF JOIN`, not orders of magnitude. DuckDB rewrites correlated subqueries into joins, so it doesn't run per row. The window strategy is within about 30% of `ASOF JOIN` either way, and slightly faster at 200 securities in the first full run. The README reports the measured numbers as they are. `ASOF JOIN` stays the primary path because it is the shortest correct statement of the rule, not because it wins every size.
