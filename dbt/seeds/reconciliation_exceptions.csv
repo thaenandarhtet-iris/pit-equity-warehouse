@@ -1,0 +1,2 @@
+security_id,trade_date,reason
+732717,2026-10-09,"Tiingo reports a 0.2775 dividend for T that day, but its adjusted close does not absorb it (adjusted-to-raw ratio 0.98764 to 0.98781 across the ex-date). Our return from raw fields is -9.70%; the vendor's is -10.80%."
