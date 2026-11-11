@@ -58,6 +58,27 @@ models:
       - name: trade_date
         data_tests: [not_null]
 
+  - name: fct_features_daily
+    description: >
+      Point-in-time features per (trade_date, security_id), built with ASOF
+      LEFT JOIN onto the snapshot events. Each metric has a
+      <metric>_source_available_date column for auditing.
+    columns:
+      - name: security_id
+        data_tests: [not_null]
+      - name: trade_date
+        data_tests: [not_null]
+
+  - name: fct_features_daily_naive
+    description: >
+      Deliberately leaky comparison model: values keyed on period_end, latest
+      version always. Exists only for rpt_leakage_summary and to prove
+      assert_no_lookahead can fail.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [trade_date, security_id]
+
 unit_tests:
   - name: test_total_return_handles_splits_and_dividends
     description: >
@@ -154,3 +175,39 @@ unit_tests:
         - {trade_date: "2020-01-03", security_id: 2}
         - {trade_date: "2020-01-06", security_id: 2}
         - {trade_date: "2020-01-09", security_id: 2}
+
+  - name: test_features_use_only_what_was_known_that_day
+    description: >
+      Fundamentals for security 1 become available on 2023-05-01, so
+      2023-04-28 has no fundamentals. On 2023-05-01: market cap 30 * 10 = 300,
+      P/E 300 / 20 = 15, P/B 300 / 50 = 6, D/E 50 / 50 = 1. Security 2 has
+      negative equity and a loss, so P/E and P/B are null.
+    model: fct_features_daily
+    given:
+      - input: ref('fct_universe_daily')
+        rows:
+          - {trade_date: "2023-04-28", security_id: 1}
+          - {trade_date: "2023-05-01", security_id: 1}
+          - {trade_date: "2023-05-01", security_id: 2}
+      - input: ref('fct_prices_daily')
+        rows:
+          - {security_id: 1, trade_date: "2023-04-28", close: 29}
+          - {security_id: 1, trade_date: "2023-05-01", close: 30}
+          - {security_id: 2, trade_date: "2023-05-01", close: 5}
+      - input: ref('int_fundamentals__snapshot_events')
+        rows:
+          - {cik: 1, metric: total_liabilities, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {cik: 1, metric: stockholders_equity, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {cik: 1, metric: shares_outstanding, event_date: "2023-05-01", period_end: "2023-04-20", value: 10, available_date: "2023-05-01"}
+          - {cik: 2, metric: stockholders_equity, event_date: "2023-02-01", period_end: "2022-12-31", value: -4, available_date: "2023-02-01"}
+          - {cik: 2, metric: total_liabilities, event_date: "2023-02-01", period_end: "2022-12-31", value: 8, available_date: "2023-02-01"}
+          - {cik: 2, metric: shares_outstanding, event_date: "2023-02-01", period_end: "2023-01-20", value: 2, available_date: "2023-02-01"}
+      - input: ref('int_fundamentals__ttm_events')
+        rows:
+          - {cik: 1, metric: net_income_ttm, event_date: "2023-05-01", period_end: "2023-03-31", value: 20, source_available_date: "2023-05-01"}
+          - {cik: 2, metric: net_income_ttm, event_date: "2023-02-01", period_end: "2022-12-31", value: -1, source_available_date: "2023-02-01"}
+    expect:
+      rows:
+        - {trade_date: "2023-04-28", security_id: 1, close: 29, market_cap: null, pe_ttm: null, pb: null, debt_to_equity: null, stockholders_equity_source_available_date: null}
+        - {trade_date: "2023-05-01", security_id: 1, close: 30, market_cap: 300, pe_ttm: 15, pb: 6, debt_to_equity: 1, stockholders_equity_source_available_date: "2023-05-01"}
+        - {trade_date: "2023-05-01", security_id: 2, close: 5, market_cap: 10, pe_ttm: null, pb: null, debt_to_equity: -2, stockholders_equity_source_available_date: "2023-02-01"}
