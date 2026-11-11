@@ -8,6 +8,7 @@ from pitwh.universe import (
     apply_filer_history,
     filed_during,
     filenames_cite,
+    filer_ciks,
     in_window,
     late_filers,
     membership_intervals,
@@ -317,3 +318,15 @@ def test_filer_that_starts_reporting_late_is_flagged():
     ]
     first[2115436] = date(2015, 2, 1)
     assert late_filers(members, filers, first.get) == []
+
+
+def test_sec_download_covers_every_filer_but_skips_non_sec_ids():
+    filers = pd.DataFrame(
+        {
+            "security_id": [2115436, 2115436, -1, 30554],
+            "cik": [2115436, 34088, -1, 30554],
+            "valid_from": [None] * 4,
+            "valid_to": [None] * 4,
+        }
+    )
+    assert filer_ciks(filers) == [30554, 34088, 2115436]

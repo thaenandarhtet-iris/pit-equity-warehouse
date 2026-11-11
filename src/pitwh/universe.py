@@ -322,6 +322,11 @@ def apply_filer_history(
     return out, pd.DataFrame(flat, columns=FILERS_COLUMNS)
 
 
+def filer_ciks(filers: pd.DataFrame) -> list[int]:
+    """Every SEC filer the sample needs, predecessors included; negative IDs file nothing."""
+    return sorted(int(c) for c in filers["cik"].unique() if c > 0)
+
+
 def late_filers(
     members: pd.DataFrame,
     filers: pd.DataFrame,

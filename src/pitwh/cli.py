@@ -21,13 +21,20 @@ def main() -> None:
 @app.command("ingest-sec")
 def ingest_sec(
     cik: Annotated[list[int] | None, typer.Option(help="CIK to fetch; repeatable")] = None,
+    sample: Annotated[
+        bool, typer.Option(help="Fetch every filer in universe_filers.parquet")
+    ] = False,
     refresh: Annotated[bool, typer.Option(help="Re-download even if cached")] = False,
 ) -> None:
     """Fetch tickers, submissions and companyfacts into data/raw/sec, then land Parquet."""
     raw_dir = config.RAW_DIR / "sec"
     client = sec.SecClient.from_env()
     sec.ingest_company_tickers(client, raw_dir, refresh)
-    ciks = cik or list(config.SEC_TEST_CIKS.values())
+    if sample:
+        filers = pd.read_parquet(config.PARQUET_DIR / "universe_filers.parquet")
+        ciks = universe.filer_ciks(filers)
+    else:
+        ciks = cik or list(config.SEC_TEST_CIKS.values())
     for c in ciks:
         sec.ingest_company(client, c, raw_dir, refresh)
     typer.echo(f"fetched {len(ciks)} companies")
