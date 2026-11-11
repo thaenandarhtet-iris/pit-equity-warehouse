@@ -3,8 +3,10 @@
 import json
 import logging
 import os
+import random
 import time
 from collections.abc import Callable, Iterable
+from datetime import date
 from pathlib import Path
 
 import httpx
@@ -128,21 +130,65 @@ COLUMNS = {
 }
 
 
-def trim_price_fixtures(
-    raw_dir: Path, out_dir: Path, symbols: Iterable[str], start: str = PRICE_START
-) -> None:
-    """Copy real Tiingo responses for `symbols` into fixtures, keeping only landed fields.
+def synthetic_prices(sessions: list[date], actions: pd.DataFrame, seed: int) -> list[dict]:
+    """A Tiingo-shaped daily series on a seeded random walk, with the given
+    dividends and splits applied on their real dates.
 
-    Same layout as the raw cache, so land_prices reads either.
+    Tiingo's free plan licenses its data for internal use only, so the
+    committed CI fixtures are synthetic. The adjusted close is back-adjusted
+    with the convention the real data was confirmed to follow (see
+    docs/decisions.md): each day's adjusted ratio is (close + div) * split /
+    previous close.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    keep = ["date", *COLUMNS]
-    for symbol in symbols:
-        rows = json.loads((raw_dir / f"{symbol}.json").read_text())
-        rows = [{k: r[k] for k in keep} for r in rows if r["date"][:10] >= start]
+    rng = random.Random(seed)
+    events = {
+        d: (float(div), float(split))
+        for d, div, split in actions[["date", "div_cash", "split_factor"]].itertuples(index=False)
+    }
+    closes, prev = [], 100.0
+    for day in sessions:
+        div, split = events.get(day, (0.0, 1.0))
+        prev = max(round(prev * (1 + rng.gauss(0.0003, 0.015)) / split - div, 2), 0.01)
+        closes.append(prev)
+    adj = [closes[-1]]
+    for i in range(len(sessions) - 1, 0, -1):
+        div, split = events.get(sessions[i], (0.0, 1.0))
+        adj.append(adj[-1] / ((closes[i] + div) * split / closes[i - 1]))
+    adj.reverse()
+    rows = []
+    for i, day in enumerate(sessions):
+        div, split = events.get(day, (0.0, 1.0))
+        open_ = closes[i - 1] / split if i else closes[i]
+        rows.append(
+            {
+                "date": f"{day.isoformat()}T00:00:00.000Z",
+                "open": round(open_, 2),
+                "high": round(max(open_, closes[i]) * 1.005, 2),
+                "low": round(min(open_, closes[i]) * 0.995, 2),
+                "close": closes[i],
+                "volume": rng.randrange(1_000_000, 50_000_000),
+                "adjClose": adj[i],
+                "divCash": div,
+                "splitFactor": split,
+            }
+        )
+    return rows
+
+
+def write_synthetic_price_fixtures(tiingo_dir: Path, sessions: list[date], seed: int) -> list[str]:
+    """Write prices/<symbol>.json for each row of symbols.csv from corporate_actions.csv."""
+    symbols = pd.read_csv(tiingo_dir / "symbols.csv", parse_dates=["first_date", "last_date"])
+    actions = pd.read_csv(tiingo_dir / "corporate_actions.csv", parse_dates=["date"])
+    actions["date"] = actions["date"].dt.date
+    out = tiingo_dir / "prices"
+    out.mkdir(parents=True, exist_ok=True)
+    for i, s in enumerate(symbols.itertuples(index=False)):
+        days = [d for d in sessions if s.first_date.date() <= d <= s.last_date.date()]
+        rows = synthetic_prices(days, actions[actions.symbol == s.symbol], seed + i)
         # One row per line keeps fixture diffs readable.
         body = ",\n".join(json.dumps(r, separators=(",", ":")) for r in rows)
-        (out_dir / f"{symbol}.json").write_text(f"[\n{body}\n]\n")
+        (out / f"{s.symbol}.json").write_text(f"[\n{body}\n]\n")
+    return list(symbols.symbol)
 
 
 def land_prices(raw_dir: Path, out: Path) -> int:

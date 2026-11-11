@@ -118,11 +118,18 @@ def test_apple_ttm_after_fy2023_10k_equals_reported_fiscal_year(warehouse):
     assert rows == [("net_income_ttm", 96_995_000_000.0), ("revenue_ttm", 383_285_000_000.0)]
 
 
-def test_apple_split_day_return_matches_the_vendor_adjusted_series(warehouse):
-    # AAPL split 4:1 on 2020-08-31. Raw close fell from 499.23 to 129.04, but
-    # the true return equals the ratio of Tiingo's adjusted closes on those days.
-    (ret,) = warehouse.execute(
-        "select daily_return from fct_prices_daily where security_id = ? and trade_date = ?",
+def test_split_day_return_is_not_read_as_a_crash(warehouse):
+    # AAPL split 4:1 on 2020-08-31 (the fixture prices are synthetic, the split
+    # date and factor are real). The raw close falls to about a quarter, but the
+    # total return that day must be an ordinary daily move.
+    (raw_ratio, ret) = warehouse.execute(
+        """
+        select close / lag(close) over (order by trade_date), daily_return
+        from fct_prices_daily where security_id = ?
+        qualify trade_date = ?
+        """,
         [AAPL, date(2020, 8, 31)],
     ).fetchone()
-    assert ret == pytest.approx(125.067246036 / 120.9650519966 - 1, abs=1e-9)
+    assert raw_ratio < 0.3
+    assert abs(ret) < 0.1
+    assert ret == pytest.approx(raw_ratio * 4 - 1, abs=1e-12)

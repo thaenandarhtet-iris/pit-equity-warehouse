@@ -51,9 +51,14 @@ def land_sec() -> None:
 
 @app.command("make-fixtures")
 def make_fixtures() -> None:
-    """Trim the raw SEC cache into tests/fixtures/sec for offline tests and CI."""
+    """Write the offline fixtures: trimmed SEC responses, universe tables, synthetic prices."""
     out = config.FIXTURES_DIR / "sec"
-    sec.trim_fixtures(config.RAW_DIR / "sec", out, config.SEEDS_DIR / "concept_map.csv")
+    sec.trim_fixtures(
+        config.RAW_DIR / "sec",
+        out,
+        config.SEEDS_DIR / "concept_map.csv",
+        config.SEC_TEST_CIKS.values(),
+    )
     typer.echo(f"wrote fixtures to {out}")
 
     pool = universe.in_window(
@@ -68,10 +73,18 @@ def make_fixtures() -> None:
     filers.to_csv(uni / "universe_filers.csv", index=False)
     typer.echo(f"wrote {len(members)} membership rows to {uni}")
 
-    symbols = [prices.tiingo_symbol(t) for t in config.SEC_TEST_CIKS]
-    price_out = config.FIXTURES_DIR / "tiingo" / "prices"
-    prices.trim_price_fixtures(config.RAW_DIR / "tiingo" / "prices", price_out, symbols)
-    typer.echo(f"wrote {len(symbols)} price histories to {price_out}")
+    write_price_fixtures()
+
+
+@app.command("make-price-fixtures")
+def write_price_fixtures() -> None:
+    """Write synthetic Tiingo-shaped prices (Tiingo's free data can't be shared)."""
+    sessions = calendar.trading_sessions(config.CALENDAR_START, config.CALENDAR_END)
+    tiingo_dir = config.FIXTURES_DIR / "tiingo"
+    symbols = prices.write_synthetic_price_fixtures(
+        tiingo_dir, list(sessions.session_date), config.UNIVERSE_SEED
+    )
+    typer.echo(f"wrote synthetic prices for {', '.join(symbols)} to {tiingo_dir / 'prices'}")
 
 
 @app.command("land-fixtures")

@@ -5,11 +5,10 @@ import httpx
 import pandas as pd
 import pytest
 
-from pitwh.prices import TiingoClient, land_prices, tiingo_symbol
+from pitwh.prices import COLUMNS, TiingoClient, land_prices, tiingo_symbol
 
-# Tiingo's response shape for AAPL around its 4:1 split on 2020-08-31. The split
-# day's close, adjClose and splitFactor match a live response; the other prices
-# are illustrative.
+# Tiingo's response shape around AAPL's 4:1 split on 2020-08-31. The split date
+# and factor are real; the prices are illustrative.
 AAPL_ROWS = [
     {
         "date": "2020-08-28T00:00:00.000Z",
@@ -18,7 +17,7 @@ AAPL_ROWS = [
         "low": 495.81,
         "open": 504.05,
         "volume": 46907479,
-        "adjClose": 120.98,
+        "adjClose": 121.0,
         "adjHigh": 122.53,
         "adjLow": 120.15,
         "adjOpen": 122.15,
@@ -33,7 +32,7 @@ AAPL_ROWS = [
         "low": 126.0,
         "open": 127.58,
         "volume": 225702700,
-        "adjClose": 125.07,
+        "adjClose": 125.0,
         "adjHigh": 126.97,
         "adjLow": 122.12,
         "adjOpen": 123.65,
@@ -84,27 +83,30 @@ def test_land_prices_keeps_raw_close_split_and_dividend(tmp_path):
     assert split_day.ticker == "AAPL"
     assert split_day.close == 129.04
     assert split_day.split_factor == 4.0
-    assert split_day.adj_close == 125.07
+    assert split_day.adj_close == 125.0
     assert set(df.columns) >= {"open", "high", "low", "volume", "div_cash"}
 
 
-def test_trimmed_fixture_lands_the_same_as_the_raw_response(tmp_path):
-    from pitwh.prices import trim_price_fixtures
+def test_synthetic_prices_follow_the_corporate_actions():
+    from pitwh.prices import synthetic_prices
 
-    raw = tmp_path / "raw"
-    raw.mkdir()
-    early = dict(AAPL_ROWS[0], date="2014-11-28T00:00:00.000Z")
-    (raw / "AAPL.json").write_text(json.dumps([early, *AAPL_ROWS]))
-    out = tmp_path / "fixtures"
-
-    trim_price_fixtures(raw, out, ["AAPL"], start="2014-12-01")
-
-    assert len(json.loads((out / "AAPL.json").read_text())) == 2
-    assert "adjHigh" not in json.loads((out / "AAPL.json").read_text())[0]
-    land_prices(raw, tmp_path / "raw.parquet")
-    land_prices(out, tmp_path / "trimmed.parquet")
-    full = pd.read_parquet(tmp_path / "raw.parquet")
-    trimmed = pd.read_parquet(tmp_path / "trimmed.parquet")
-    pd.testing.assert_frame_equal(
-        full[full.trade_date >= date(2014, 12, 1)].reset_index(drop=True), trimmed
+    sessions = [date(2020, 8, d) for d in (25, 26, 27, 28, 31)] + [date(2020, 9, 1)]
+    actions = pd.DataFrame(
+        {
+            "date": [date(2020, 8, 27), date(2020, 8, 31)],
+            "div_cash": [0.5, 0.0],
+            "split_factor": [1.0, 4.0],
+        }
     )
+    rows = synthetic_prices(sessions, actions, seed=3)
+
+    assert rows == synthetic_prices(sessions, actions, seed=3)
+    assert [r["date"][:10] for r in rows] == [d.isoformat() for d in sessions]
+    by_day = {r["date"][:10]: r for r in rows}
+    assert by_day["2020-08-27"]["divCash"] == 0.5
+    split, before = by_day["2020-08-31"], by_day["2020-08-28"]
+    assert split["splitFactor"] == 4.0
+    assert split["close"] / before["close"] < 0.35  # raw price drops with the split
+    assert 0.9 < split["adjClose"] / before["adjClose"] < 1.1  # adjusted does not
+    assert rows[-1]["adjClose"] == rows[-1]["close"]  # back-adjusted to the last day
+    assert set(rows[0]) >= {"date", *COLUMNS}
