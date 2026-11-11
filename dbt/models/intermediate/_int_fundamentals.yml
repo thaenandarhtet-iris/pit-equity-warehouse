@@ -50,6 +50,21 @@ models:
       - name: event_date
         data_tests: [not_null]
 
+  - name: int_fundamentals__ttm_events
+    description: >
+      TTM revenue and net income on each date a quarter version became
+      available; null unless the four latest known quarters are consecutive.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, metric, event_date]
+    columns:
+      - name: metric
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [revenue_ttm, net_income_ttm]
+
 unit_tests:
   - name: test_discrete_quarters_from_ytd_and_annual_filings
     model: int_facts__discrete_quarters
@@ -124,3 +139,43 @@ unit_tests:
         - {metric: revenue, event_date: 2024-02-16, period_end: 2023-09-30, value: 11}
         - {metric: net_income, event_date: 2023-11-02, period_end: 2023-09-30, value: 5}
         - {metric: net_income, event_date: 2024-02-16, period_end: 2023-09-30, value: 6}
+
+  - name: test_ttm_uses_each_quarter_as_known_on_the_day
+    description: >
+      Company 1 files one quarter at a time, then restates Q3 2022 from 30 to
+      35. TTM is null until four quarters are known, and the restatement moves
+      it only from the day it is filed. Company 2 has four quarters with Q3
+      missing, so its TTM is null.
+    model: int_fundamentals__ttm_events
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: "2022-05-02", market_open_utc: "2022-05-02 13:30:00"}
+          - {session_date: "2022-08-01", market_open_utc: "2022-08-01 13:30:00"}
+          - {session_date: "2022-11-01", market_open_utc: "2022-11-01 13:30:00"}
+          - {session_date: "2023-02-01", market_open_utc: "2023-02-01 14:30:00"}
+          - {session_date: "2023-05-01", market_open_utc: "2023-05-01 13:30:00"}
+          - {session_date: "2023-06-01", market_open_utc: "2023-06-01 13:30:00"}
+      - input: ref('int_fundamentals__versions')
+        rows:
+          - {cik: 1, metric: revenue, period_start: "2022-01-01", period_end: "2022-03-31", value: 10, accession_number: a1, available_ts: "2022-04-29 21:00:00", available_date: "2022-05-02"}
+          - {cik: 1, metric: revenue, period_start: "2022-04-01", period_end: "2022-06-30", value: 20, accession_number: a2, available_ts: "2022-07-29 21:00:00", available_date: "2022-08-01"}
+          - {cik: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 30, accession_number: a3, available_ts: "2022-10-31 21:00:00", available_date: "2022-11-01"}
+          - {cik: 1, metric: revenue, period_start: "2022-10-01", period_end: "2022-12-31", value: 40, accession_number: a4, available_ts: "2023-01-31 21:00:00", available_date: "2023-02-01"}
+          - {cik: 1, metric: revenue, period_start: "2023-01-01", period_end: "2023-03-31", value: 50, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {cik: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 35, accession_number: a6, available_ts: "2023-05-31 21:00:00", available_date: "2023-06-01"}
+          # Balance-sheet metrics have no TTM.
+          - {cik: 1, metric: total_assets, period_start: null, period_end: "2023-03-31", value: 999, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {cik: 2, metric: net_income, period_start: "2022-01-01", period_end: "2022-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {cik: 2, metric: net_income, period_start: "2022-04-01", period_end: "2022-06-30", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {cik: 2, metric: net_income, period_start: "2022-10-01", period_end: "2022-12-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {cik: 2, metric: net_income, period_start: "2023-01-01", period_end: "2023-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+    expect:
+      rows:
+        - {cik: 1, metric: revenue_ttm, event_date: "2022-05-02", value: null}
+        - {cik: 1, metric: revenue_ttm, event_date: "2022-08-01", value: null}
+        - {cik: 1, metric: revenue_ttm, event_date: "2022-11-01", value: null}
+        - {cik: 1, metric: revenue_ttm, event_date: "2023-02-01", value: 100}
+        - {cik: 1, metric: revenue_ttm, event_date: "2023-05-01", value: 140}
+        - {cik: 1, metric: revenue_ttm, event_date: "2023-06-01", value: 145}
+        - {cik: 2, metric: net_income_ttm, event_date: "2023-05-01", value: null}

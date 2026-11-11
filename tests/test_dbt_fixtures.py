@@ -99,3 +99,18 @@ def test_latest_filed_lookup_would_go_backward_but_snapshot_does_not(warehouse):
     ).fetchone()[0]
     assert naive_regressions > 0
     assert pit_regressions == 0
+
+
+def test_apple_ttm_after_fy2023_10k_equals_reported_fiscal_year(warehouse):
+    # Apple's FY2023 (ended 2023-09-30) revenue was $383.285B and net income
+    # $96.995B. TTM known the session after the 10-K must equal those totals.
+    rows = warehouse.execute(
+        """
+        select metric, value
+        from int_fundamentals__ttm_events
+        where cik = ? and event_date = '2023-11-03'
+        order by metric
+        """,
+        [AAPL],
+    ).fetchall()
+    assert rows == [("net_income_ttm", 96_995_000_000.0), ("revenue_ttm", 383_285_000_000.0)]
