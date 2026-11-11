@@ -139,6 +139,7 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Alternatives:** compound over the whole history and compare at the end.
 - **Why:** over 11 years compounding adds up Tiingo's rounding into false failures and hides which day is wrong. Daily comparison names the day.
 - **Result on the CI fixtures (2026-11-11):** 13,856 daily returns for the five test companies, largest gap from the vendor 2e-10. **Test the test:** raising one AAPL close (2021-03-01) by 1% in a scratch copy makes the test fail on exactly two rows, that day (+1.05%) and the next (-0.97%), and stores both.
+- **Result on all real prices (2026-11-11):** 478,371 daily returns. The first run found 55 mismatches, 54 of them DD: old DuPont and DuPont de Nemours share Tiingo's DD series, and `fct_prices_daily` took the previous close per symbol, so each DD day was paired with its own duplicate. Fixed by taking it per security (unit-tested). After the fix one mismatch remains: AT&T (T) 2026-10-09, ours -9.70%, vendor -10.80%. Tiingo's raw fields report a 0.2775 dividend that day, but its adjusted-to-raw ratio barely moves across the ex-date (0.98764 to 0.98781), so the vendor's adjusted series has not absorbed that dividend. Every other return matches within 2.1e-10.
 
 ## 2026-11-10: `dim_security` is SCD2 on CIK, changing on ticker or membership
 - **Decision:** one row per CIK for each interval where its ticker and S&P 500 membership are unchanged, with `valid_from`/`valid_to`. A rename (FB to META) or leaving the index starts a new row.

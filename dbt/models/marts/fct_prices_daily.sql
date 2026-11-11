@@ -17,7 +17,9 @@ with prices as (
     from {{ ref('stg_prices__daily') }} as p
     inner join {{ ref('stg_universe__securities') }} as s
         on p.price_symbol = s.price_symbol
-    window w as (partition by p.price_symbol order by p.trade_date)
+    -- Per security, not per symbol: two securities can share one series (old
+    -- DuPont and DuPont de Nemours both use DD).
+    window w as (partition by s.security_id order by p.trade_date)
 )
 select
     security_id,

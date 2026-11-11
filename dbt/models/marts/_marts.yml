@@ -120,6 +120,28 @@ unit_tests:
         - {security_id: 1, trade_date: "2020-01-06", daily_return: 0.125}
         - {security_id: 1, trade_date: "2020-01-13", daily_return: 0.125}
 
+  - name: test_two_securities_sharing_a_price_symbol_each_get_their_own_returns
+    description: >
+      Old DuPont and DuPont de Nemours both use Tiingo's DD series. Each
+      security's previous close must come from its own rows, not from the other
+      security's copy of the same day.
+    model: fct_prices_daily
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {security_id: 30554, price_symbol: DD}
+          - {security_id: 1666700, price_symbol: DD}
+      - input: ref('stg_prices__daily')
+        rows:
+          - {price_symbol: DD, trade_date: "2020-01-02", close: 64, div_cash: 0, split_factor: 1}
+          - {price_symbol: DD, trade_date: "2020-01-03", close: 80, div_cash: 0, split_factor: 1}
+    expect:
+      rows:
+        - {security_id: 30554, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 30554, trade_date: "2020-01-03", daily_return: 0.25}
+        - {security_id: 1666700, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 1666700, trade_date: "2020-01-03", daily_return: 0.25}
+
   - name: test_dim_security_splits_history_at_every_change
     description: >
       CIK 1 is renamed (FB to META, contiguous because end dates are exclusive).
