@@ -106,7 +106,7 @@ make setup && make all  # ingest -> build -> test -> bench
 
 `make ingest` caches every download in `data/raw`, so a rerun only fetches what is missing. On Tiingo's free plan (50 requests an hour), the first price download takes about four hours.
 
-Offline, from the committed fixtures (five companies, real responses, no keys needed). This is what CI runs:
+Offline, from the committed fixtures, with no keys needed. The fixtures are real SEC responses for five companies, plus synthetic prices that carry those companies' real splits and dividends. This is what CI runs:
 
 ```bash
 make test build-fixtures
@@ -116,7 +116,7 @@ docker build -t pitwh . && docker run --rm pitwh   # same, in a container
 ## Data sources, licenses and limitations
 
 - **SEC EDGAR** submissions and companyfacts (public domain). Requests are throttled to 8 per second, under SEC's 10, and send a declared User-Agent.
-- **Tiingo** end-of-day prices. The raw cache is not committed. The CI fixtures include trimmed Tiingo price histories for five companies; check Tiingo's terms before publishing them.
+- **Tiingo** end-of-day prices. The free plan licenses data for internal use only, so no Tiingo data is committed. The CI price fixtures are a seeded random walk on the real trading calendar, with each company's real split and dividend dates (`pitwh make-price-fixtures`). Reconciliation against Tiingo's real adjusted closes runs on the full local build, and the table above reports it.
 - **S&P 500 membership history** from [fja05680/sp500](https://github.com/fja05680/sp500) (MIT), pinned to one commit. The universe is a **seeded sample**: 200 draws, plus 3 predecessors split out of mergers. It is not the full index.
 - **Departed names without prices.** Tiingo serves delisted tickers, but only the current holder of a reused ticker. Departed companies whose ticker was later reused stay in the universe with fundamentals and null returns, so return statistics under-represent failed and acquired names. The table above gives the count.
 - **XBRL tag mapping** uses a priority list per metric (`dbt/seeds/concept_map.csv`), chosen within each filing. Fallback usage is in the table above; only revenue needed one. `total_liabilities` has the thinnest coverage, because many balance sheets have no total-liabilities line to tag.
