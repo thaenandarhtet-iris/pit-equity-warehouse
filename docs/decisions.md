@@ -138,6 +138,7 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Decision:** compare each day's return with the ratio of Tiingo's consecutive `adjClose` values. A day off by more than 1e-4 fails the test, and every mismatch is kept in a model the README counts.
 - **Alternatives:** compound over the whole history and compare at the end.
 - **Why:** over 11 years compounding adds up Tiingo's rounding into false failures and hides which day is wrong. Daily comparison names the day.
+- **Result on the CI fixtures (2026-11-11):** 13,856 daily returns for the five test companies, largest gap from the vendor 2e-10. **Test the test:** raising one AAPL close (2021-03-01) by 1% in a scratch copy makes the test fail on exactly two rows, that day (+1.05%) and the next (-0.97%), and stores both.
 
 ## 2026-11-10: `dim_security` is SCD2 on CIK, changing on ticker or membership
 - **Decision:** one row per CIK for each interval where its ticker and S&P 500 membership are unchanged, with `valid_from`/`valid_to`. A rename (FB to META) or leaving the index starts a new row.

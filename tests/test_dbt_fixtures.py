@@ -116,3 +116,13 @@ def test_apple_ttm_after_fy2023_10k_equals_reported_fiscal_year(warehouse):
         [AAPL],
     ).fetchall()
     assert rows == [("net_income_ttm", 96_995_000_000.0), ("revenue_ttm", 383_285_000_000.0)]
+
+
+def test_apple_split_day_return_matches_the_vendor_adjusted_series(warehouse):
+    # AAPL split 4:1 on 2020-08-31. Raw close fell from 499.23 to 129.04, but
+    # the true return equals the ratio of Tiingo's adjusted closes on those days.
+    (ret,) = warehouse.execute(
+        "select daily_return from fct_prices_daily where security_id = ? and trade_date = ?",
+        [AAPL, date(2020, 8, 31)],
+    ).fetchone()
+    assert ret == pytest.approx(125.067246036 / 120.9650519966 - 1, abs=1e-9)
