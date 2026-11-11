@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
 import httpx
@@ -246,15 +246,15 @@ def _filter_block(block: dict, keep: set[str]) -> dict:
     return {col: [vals[i] for i in idx] for col, vals in block.items()}
 
 
-def trim_fixtures(raw_dir: Path, out_dir: Path, concept_map: Path) -> None:
+def trim_fixtures(raw_dir: Path, out_dir: Path, concept_map: Path, ciks: Iterable[int]) -> None:
     """Cut cached SEC responses down to mapped tags and the filings they cite.
 
     The output keeps the raw cache layout and the real response shapes, so the
     same landing code runs on it offline in CI.
     """
     wanted = _wanted_tags(concept_map)
-    for facts_path in sorted((raw_dir / "companyfacts").glob("CIK*.json")):
-        doc = json.loads(facts_path.read_text())
+    for name in sorted(cik_name(c) for c in ciks):
+        doc = json.loads((raw_dir / "companyfacts" / name).read_text())
         kept: dict[str, dict] = {}
         accns: set[str] = set()
         for taxonomy, tags in doc.get("facts", {}).items():
@@ -262,10 +262,10 @@ def trim_fixtures(raw_dir: Path, out_dir: Path, concept_map: Path) -> None:
                 if (taxonomy, tag) in wanted:
                     kept.setdefault(taxonomy, {})[tag] = body
                     accns.update(f["accn"] for facts in body["units"].values() for f in facts)
-        _dump(out_dir / "companyfacts" / facts_path.name, {**doc, "facts": kept})
+        _dump(out_dir / "companyfacts" / name, {**doc, "facts": kept})
 
         subs_dir = raw_dir / "submissions"
-        subs = json.loads((subs_dir / facts_path.name).read_text())
+        subs = json.loads((subs_dir / name).read_text())
         files = []
         for extra in subs["filings"].get("files", []):
             block = _filter_block(json.loads((subs_dir / extra["name"]).read_text()), accns)
@@ -274,7 +274,7 @@ def trim_fixtures(raw_dir: Path, out_dir: Path, concept_map: Path) -> None:
                 files.append({**extra, "filingCount": len(block["accessionNumber"])})
         recent = _filter_block(subs["filings"]["recent"], accns)
         _dump(
-            out_dir / "submissions" / facts_path.name,
+            out_dir / "submissions" / name,
             {**subs, "filings": {"recent": recent, "files": files}},
         )
 

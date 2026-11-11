@@ -93,7 +93,12 @@ def test_trim_keeps_mapped_facts_and_only_their_filings(tmp_path):
         ),
     )
 
-    trim_fixtures(raw, out, config.SEEDS_DIR / "concept_map.csv")
+    # A company in the cache but not in the fixture set is left out.
+    _write(raw / "companyfacts" / "CIK0000000099.json", {"cik": 99, "facts": {}})
+
+    trim_fixtures(raw, out, config.SEEDS_DIR / "concept_map.csv", ciks=[42])
+
+    assert not (out / "companyfacts" / "CIK0000000099.json").exists()
 
     facts = json.loads((out / "companyfacts" / "CIK0000000042.json").read_text())
     assert list(facts["facts"]["us-gaap"]) == ["NetIncomeLoss"]
