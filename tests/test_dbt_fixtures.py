@@ -43,7 +43,7 @@ def test_apple_q4_is_derived_from_the_10k_and_matches_reported(warehouse):
         """
         select metric, value, available_date
         from int_facts__discrete_quarters
-        where cik = ? and period_end = '2023-09-30' and is_derived
+        where security_id = ? and period_end = '2023-09-30' and is_derived
         qualify row_number() over (partition by metric order by available_ts) = 1
         order by metric
         """,
@@ -62,7 +62,7 @@ def test_kraft_heinz_2017_restatement_is_flagged(warehouse):
         """
         select value, is_restatement, available_date
         from int_fundamentals__versions
-        where cik = ? and metric = 'net_income' and period_end = '2017-04-01'
+        where security_id = ? and metric = 'net_income' and period_end = '2017-04-01'
         order by version_number
         """,
         [KHC],
@@ -77,13 +77,15 @@ def test_latest_filed_lookup_would_go_backward_but_snapshot_does_not(warehouse):
     naive_regressions = warehouse.execute(
         """
         with latest as (
-            select cik, metric, available_date, arg_max(period_end, available_ts) as period_end
+            select
+                security_id, metric, available_date,
+                arg_max(period_end, available_ts) as period_end
             from int_fundamentals__versions
             group by all
         )
         select count(*) from (
             select period_end < lag(period_end) over (
-                partition by cik, metric order by available_date) as backward
+                partition by security_id, metric order by available_date) as backward
             from latest
         ) where backward
         """
@@ -92,7 +94,7 @@ def test_latest_filed_lookup_would_go_backward_but_snapshot_does_not(warehouse):
         """
         select count(*) from (
             select period_end < lag(period_end) over (
-                partition by cik, metric order by event_date) as backward
+                partition by security_id, metric order by event_date) as backward
             from int_fundamentals__snapshot_events
         ) where backward
         """
@@ -108,7 +110,7 @@ def test_apple_ttm_after_fy2023_10k_equals_reported_fiscal_year(warehouse):
         """
         select metric, value
         from int_fundamentals__ttm_events
-        where cik = ? and event_date = '2023-11-03'
+        where security_id = ? and event_date = '2023-11-03'
         order by metric
         """,
         [AAPL],

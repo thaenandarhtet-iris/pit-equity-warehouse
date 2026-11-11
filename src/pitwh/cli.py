@@ -53,11 +53,12 @@ def make_fixtures() -> None:
         universe.membership_intervals(universe.load_snapshots(universe.fetch_snapshots()))
     )
     names = {cik: sec.periodic_filings(out, cik)[0] for cik in config.SEC_TEST_CIKS.values()}
-    members, securities = universe.fixture_tables(pool, config.SEC_TEST_CIKS, names)
+    members, securities, filers = universe.fixture_tables(pool, config.SEC_TEST_CIKS, names)
     uni = config.FIXTURES_DIR / "universe"
     uni.mkdir(parents=True, exist_ok=True)
     members.to_csv(uni / "universe_membership.csv", index=False)
     securities.to_csv(uni / "universe_securities.csv", index=False)
+    filers.to_csv(uni / "universe_filers.csv", index=False)
     typer.echo(f"wrote {len(members)} membership rows to {uni}")
 
 
@@ -71,7 +72,7 @@ def land_fixtures() -> None:
 
 @app.command("build-universe")
 def build_universe() -> None:
-    """Sample the S&P 500 history, resolve every ticker interval to a CIK, write Parquet."""
+    """Sample the S&P 500 history, resolve each ticker interval to its SEC filers, write Parquet."""
     snapshots = universe.load_snapshots(universe.fetch_snapshots())
     pool = universe.in_window(universe.membership_intervals(snapshots))
     window_end = pd.to_datetime(snapshots["date"]).max().date()
@@ -85,12 +86,28 @@ def build_universe() -> None:
         resolver.method.get((t, s), "unknown")
         for t, s in zip(members.ticker, members.start_date, strict=True)
     ]
+    members, filers = universe.apply_filer_history(members, universe.load_filer_history())
+
+    def first_filing(cik: int):
+        dates = resolver.filings(cik)[1]["filing_date"]
+        return dates.min() if len(dates) else None
+
+    late = universe.late_filers(members, filers, first_filing)
+    if late:
+        typer.echo(
+            "filers that start reporting partway through their interval:\n"
+            + "\n".join(late)
+            + f"\nAdd verified predecessors to {universe.FILER_HISTORY_PATH} and rerun.",
+            err=True,
+        )
+        raise typer.Exit(1)
     supported = prices.supported_tickers(config.RAW_DIR / "tiingo")
     securities = universe.securities_table(members, resolver, supported, window_end=window_end)
 
     config.PARQUET_DIR.mkdir(parents=True, exist_ok=True)
     members.to_parquet(config.PARQUET_DIR / "universe_membership.parquet", index=False)
     securities.to_parquet(config.PARQUET_DIR / "universe_securities.parquet", index=False)
+    filers.to_parquet(config.PARQUET_DIR / "universe_filers.parquet", index=False)
     typer.echo(
         f"securities: {len(securities)}, departed: {int(securities.is_departed.sum())}, "
         f"without Tiingo coverage: {int(securities.price_symbol.isna().sum())}"

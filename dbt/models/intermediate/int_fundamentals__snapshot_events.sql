@@ -9,18 +9,18 @@ with versions as (
 ),
 
 per_date as (
-    select cik, metric, available_date, max(period_end) as max_period_end
+    select security_id, metric, available_date, max(period_end) as max_period_end
     from versions
     group by all
 ),
 
 latest_period as (
     select
-        p.cik,
+        p.security_id,
         p.metric,
         p.available_date as event_date,
         max(p.max_period_end) over (
-            partition by p.cik, p.metric
+            partition by p.security_id, p.metric
             order by p.available_date
             rows between unbounded preceding and current row
         ) as period_end,
@@ -33,7 +33,7 @@ latest_period as (
 )
 
 select
-    l.cik,
+    l.security_id,
     l.metric,
     l.event_date,
     v.period_start,
@@ -46,7 +46,7 @@ select
     v.is_restatement
 from latest_period as l
 asof inner join versions as v
-    on l.cik = v.cik
+    on l.security_id = v.security_id
     and l.metric = v.metric
     and l.period_end = v.period_end
     and l.cutoff_ts > v.available_ts

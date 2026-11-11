@@ -255,6 +255,94 @@ def select_universe(
 
 
 OVERRIDES_PATH = config.SEEDS_DIR / "ticker_cik_overrides.csv"
+FILER_HISTORY_PATH = config.SEEDS_DIR / "filer_history.csv"
+
+FILERS_COLUMNS = ["security_id", "cik", "valid_from", "valid_to"]
+
+
+def load_filer_history(path: Path = FILER_HISTORY_PATH) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    for col in ("start_date", "valid_from"):
+        df[col] = pd.to_datetime(df[col]).dt.date
+    return df
+
+
+def apply_filer_history(
+    members: pd.DataFrame, history: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Give every membership interval a security_id and list each security's filers.
+
+    `history` has hand-verified rows (ticker, start_date, cik, valid_from,
+    same_security) for intervals whose SEC filer changed. A reorganization
+    (same_security) keeps one security, keyed on its latest CIK, filed for by
+    each CIK in turn. A merger splits the interval into one security per filer.
+    Filer validity is [valid_from, valid_to) on acceptance date; None is open.
+    """
+    history = history.assign(
+        start_date=pd.to_datetime(history["start_date"]).dt.date,
+        valid_from=pd.to_datetime(history["valid_from"]).dt.date,
+    )
+    steps = {
+        key: g.sort_values("valid_from")
+        for key, g in history.groupby(["ticker", "start_date"], sort=False)
+    }
+    rows, filers = [], {}
+    for r in members.itertuples(index=False):
+        g = steps.get((r.ticker, r.start_date))
+        if g is None:
+            rows.append((int(r.cik), r.ticker, r.start_date, _opt(r.end_date), r.resolution))
+            filers.setdefault(int(r.cik), [(int(r.cik), int(r.cik), None, None)])
+            continue
+        ciks = [int(c) for c in g["cik"]]
+        bounds = [None, *list(g["valid_from"])[1:], None]
+        same = bool(g["same_security"].iloc[0])
+        spans = [(ciks[i], bounds[i], bounds[i + 1]) for i in range(len(ciks))]
+        if same:
+            sid = ciks[-1]
+            rows.append((sid, r.ticker, r.start_date, _opt(r.end_date), r.resolution))
+            filers[sid] = [(sid, c, lo, hi) for c, lo, hi in spans]
+            continue
+        for c, lo, hi in spans:
+            start = max(r.start_date, lo) if lo else r.start_date
+            end = _opt(r.end_date)
+            end = min(end, hi) if (end and hi) else (hi or end)
+            if end is None or start < end:
+                rows.append((c, r.ticker, start, end, r.resolution))
+            # History rows win over a plain entry from another interval.
+            filers[c] = [(c, c, lo, hi)]
+    out = pd.DataFrame(
+        rows, columns=["security_id", "ticker", "start_date", "end_date", "resolution"]
+    )
+    flat = [row for sid in sorted(filers) for row in filers[sid]]
+    return out, pd.DataFrame(flat, columns=FILERS_COLUMNS)
+
+
+def late_filers(
+    members: pd.DataFrame,
+    filers: pd.DataFrame,
+    first_filing: Callable[[int], date | None],
+    start: date = config.START_DATE,
+) -> list[str]:
+    """Intervals whose filer only starts filing 10-Ks/10-Qs well after it should.
+
+    A resolved CIK can be a successor holding company formed partway through
+    the interval (ExxonMobil Holdings, 2026); its predecessor must be added to
+    the filer history, or the security has no fundamentals before then.
+    """
+    problems = []
+    for r in members.itertuples(index=False):
+        if r.security_id < 0:
+            continue
+        end = _opt(r.end_date)
+        for f in filers[filers["security_id"] == r.security_id].itertuples(index=False):
+            need = max(r.start_date, start, f.valid_from or date.min)
+            if (f.valid_to is not None and f.valid_to <= need) or (end and need >= end):
+                continue
+            first = first_filing(int(f.cik))
+            if first is None or first > need + FILING_SLACK:
+                when = f"first files {first}" if first else "never files"
+                problems.append(f"{r.ticker} from {r.start_date}: CIK {f.cik} {when}")
+    return problems
 
 
 class Resolver:
@@ -357,19 +445,19 @@ def securities_table(
     start: date = config.START_DATE,
     window_end: date | None = None,
 ) -> pd.DataFrame:
-    """One row per CIK: name, departure status, and the Tiingo symbol for its prices.
+    """One row per security: name, departure status, and the Tiingo symbol for its prices.
 
     A current member needs prices only up to window_end (the last membership
     snapshot): later delistings are outside the universe.
     """
     by_cik = {c: t for t, c in resolver.sec_map.items()}
     rows = []
-    for cik, g in members.groupby("cik"):
+    for sid, g in members.groupby("security_id"):
         is_departed = bool(g["end_date"].notna().all())
         need_from = max(min(g["start_date"]), start)
         need_to = max(g["end_date"]) if is_departed else window_end
         # Tiingo files a renamed company's whole history under its newest ticker.
-        candidates = [by_cik[cik]] if cik in by_cik else []
+        candidates = [by_cik[sid]] if sid in by_cik else []
         candidates += list(g.sort_values("start_date", ascending=False)["ticker"])
         symbol = next(
             (
@@ -379,8 +467,8 @@ def securities_table(
             ),
             None,
         )
-        rows.append((cik, resolver.name(cik), is_departed, symbol))
-    return pd.DataFrame(rows, columns=["cik", "name", "is_departed", "price_symbol"])
+        rows.append((sid, resolver.name(sid), is_departed, symbol))
+    return pd.DataFrame(rows, columns=["security_id", "name", "is_departed", "price_symbol"])
 
 
 def fetch_snapshots(path: Path = config.RAW_DIR / "universe" / "historical.csv") -> Path:
@@ -394,18 +482,22 @@ def fetch_snapshots(path: Path = config.RAW_DIR / "universe" / "historical.csv")
 
 def fixture_tables(
     pool: pd.DataFrame, ciks: dict[str, int], names: dict[int, str]
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Membership and securities rows for a fixed ticker->CIK set (offline CI fixtures).
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Membership, securities and filers rows for a fixed ticker->CIK set (offline CI).
 
-    Same columns as build-universe writes, so the dbt sources read either.
+    Same columns as build-universe writes, so the dbt sources read either. The
+    fixture companies never changed SEC filer, so each is its own only filer.
     """
     members = pool[pool["ticker"].isin(ciks)].assign(
-        cik=lambda d: d["ticker"].map(ciks), resolution="fixture"
-    )[["cik", "ticker", "start_date", "end_date", "resolution"]]
+        security_id=lambda d: d["ticker"].map(ciks), resolution="fixture"
+    )[["security_id", "ticker", "start_date", "end_date", "resolution"]]
     securities = (
-        members.groupby("cik")
+        members.groupby("security_id")
         .agg(is_departed=("end_date", lambda s: bool(s.notna().all())), ticker=("ticker", "last"))
         .reset_index()
-        .assign(name=lambda d: d["cik"].map(names), price_symbol=lambda d: d["ticker"])
-    )[["cik", "name", "is_departed", "price_symbol"]]
-    return members.reset_index(drop=True), securities
+        .assign(name=lambda d: d["security_id"].map(names), price_symbol=lambda d: d["ticker"])
+    )[["security_id", "name", "is_departed", "price_symbol"]]
+    filers = pd.DataFrame(
+        [(c, c, None, None) for c in sorted(securities["security_id"])], columns=FILERS_COLUMNS
+    )
+    return members.reset_index(drop=True), securities, filers

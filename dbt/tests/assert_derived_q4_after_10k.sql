@@ -3,7 +3,7 @@
 select q.*
 from {{ ref('int_facts__discrete_quarters') }} as q
 inner join {{ ref('int_filings__availability') }} as f
-    on q.cik = f.cik
+    on q.security_id = f.security_id
     and q.accession_number = f.accession_number
 where q.derived_from = 'fiscal_year'
     and q.available_ts < f.available_ts

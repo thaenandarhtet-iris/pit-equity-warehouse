@@ -29,7 +29,7 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, metric, period_start, period_end, accession_number]
+            columns: [security_id, metric, period_start, period_end, accession_number]
     columns:
       - name: metric
         data_tests:
@@ -65,6 +65,9 @@ unit_tests:
           - {session_date: 2024-03-08, market_open_utc: "2024-03-08 14:30:00"}
           - {session_date: 2024-03-11, market_open_utc: "2024-03-11 13:30:00"}
           - {session_date: 2024-03-12, market_open_utc: "2024-03-12 13:30:00"}
+      - input: ref('stg_universe__filers')
+        rows:
+          - {security_id: 1, cik: 1, valid_from: null, valid_to: null}
       - input: ref('stg_sec__filings')
         rows:
           - {cik: 1, accession_number: after-close, form: 10-Q, accepted_at_utc: "2023-07-05 20:05:00"}
@@ -86,6 +89,35 @@ unit_tests:
         # Known before the calendar starts, so usable from its first session.
         - {accession_number: before-calendar, available_date: 2023-06-30}
 
+  - name: test_each_filer_counts_only_while_it_reports_for_the_security
+    description: >
+      Security 20 was filed for by CIK 10 until a reorganization on
+      2019-07-31, then by CIK 20. CIK 10 keeps filing as a subsidiary, and
+      those later filings must not count. CIK 99 is not a sampled filer.
+    model: int_filings__availability
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: 2019-05-02, market_open_utc: "2019-05-02 13:30:00"}
+          - {session_date: 2019-08-01, market_open_utc: "2019-08-01 13:30:00"}
+          - {session_date: 2019-11-01, market_open_utc: "2019-11-01 13:30:00"}
+      - input: ref('stg_universe__filers')
+        rows:
+          - {security_id: 20, cik: 10, valid_from: null, valid_to: 2019-07-31}
+          - {security_id: 20, cik: 20, valid_from: 2019-07-31, valid_to: null}
+      - input: ref('stg_sec__filings')
+        rows:
+          - {cik: 10, accession_number: old-q1, form: 10-Q, accepted_at_utc: "2019-05-01 20:00:00"}
+          - {cik: 10, accession_number: old-q2-as-subsidiary, form: 10-Q, accepted_at_utc: "2019-08-01 20:00:00"}
+          - {cik: 20, accession_number: new-q2, form: 10-Q, accepted_at_utc: "2019-07-31 20:00:00"}
+          - {cik: 20, accession_number: new-q3, form: 10-Q, accepted_at_utc: "2019-10-31 20:00:00"}
+          - {cik: 99, accession_number: unrelated, form: 10-Q, accepted_at_utc: "2019-10-31 20:00:00"}
+    expect:
+      rows:
+        - {security_id: 20, cik: 10, accession_number: old-q1, available_date: 2019-05-02}
+        - {security_id: 20, cik: 20, accession_number: new-q2, available_date: 2019-08-01}
+        - {security_id: 20, cik: 20, accession_number: new-q3, available_date: 2019-11-01}
+
   - name: test_best_tag_is_chosen_within_each_filing
     model: int_facts__mapped
     given:
@@ -96,8 +128,8 @@ unit_tests:
           - {metric: total_assets, taxonomy: us-gaap, tag: Assets, priority: 1, period_type: instant, unit: USD}
       - input: ref('int_filings__availability')
         rows:
-          - {cik: 1, accession_number: q3-10q, available_ts: "2017-11-01 20:00:00", available_date: 2017-11-02}
-          - {cik: 1, accession_number: fy18-10k, available_ts: "2018-11-02 20:00:00", available_date: 2018-11-05}
+          - {security_id: 1, cik: 1, accession_number: q3-10q, available_ts: "2017-11-01 20:00:00", available_date: 2017-11-02}
+          - {security_id: 1, cik: 1, accession_number: fy18-10k, available_ts: "2018-11-02 20:00:00", available_date: 2018-11-05}
       - input: ref('stg_sec__facts')
         rows:
           # The original 10-Q tags the quarter both ways; the higher priority wins.

@@ -3,14 +3,14 @@
 -- point-in-time choice happens in int_fundamentals__snapshot_events.
 with flows as (
     select
-        cik, metric, period_start, period_end, value, accession_number,
+        security_id, metric, period_start, period_end, value, accession_number,
         available_ts, available_date, is_derived, derived_from
     from {{ ref('int_facts__discrete_quarters') }}
 ),
 
 instants as (
     select
-        cik, metric, period_start, period_end, value, accession_number,
+        security_id, metric, period_start, period_end, value, accession_number,
         available_ts, available_date,
         false as is_derived,
         cast(null as varchar) as derived_from
@@ -33,7 +33,7 @@ select
         as is_restatement
 from versions
 window w as (
-    partition by cik, metric, period_end
+    partition by security_id, metric, period_end
     order by available_ts, accession_number
     rows between unbounded preceding and current row
 )

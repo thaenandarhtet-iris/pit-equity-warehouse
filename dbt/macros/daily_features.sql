@@ -1,5 +1,5 @@
 {# Shared tail of fct_features_daily and fct_features_daily_naive. Expects a
-   CTE named `events` (cik, metric, event_date, period_end, value,
+   CTE named `events` (security_id, metric, event_date, period_end, value,
    source_available_date) and continues the WITH clause from there: ASOF join
    the universe grid onto it, pivot to one column per metric, add the ratios.
    The two models differ only in how `events` is built. #}
@@ -16,7 +16,7 @@ pit as (
     select g.trade_date, g.security_id, g.metric, e.value, e.source_available_date
     from grid as g
     asof left join events as e
-        on g.security_id = e.cik
+        on g.security_id = e.security_id
         and g.metric = e.metric
         and g.trade_date >= e.event_date
 ),

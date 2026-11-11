@@ -1,9 +1,9 @@
--- One row per (company, metric, period, filing). The best tag is picked within
+-- One row per (security, metric, period, filing). The best tag is picked within
 -- each filing, not across filings: filers re-tag old periods in later
 -- comparatives, and choosing across filings would discard the original version.
 with facts as (
     select
-        f.cik,
+        a.security_id,
         m.metric,
         f.tag,
         m.priority,
@@ -47,7 +47,7 @@ from (
     select
         *,
         row_number() over (
-            partition by cik, metric, period_start, period_end, accession_number
+            partition by security_id, metric, period_start, period_end, accession_number
             order by priority, tag
         ) as rn
     from classified

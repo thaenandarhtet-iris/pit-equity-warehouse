@@ -5,7 +5,7 @@
 -- adj_close) is kept only for the reconciliation test.
 with prices as (
     select
-        s.cik as security_id,
+        s.security_id,
         p.price_symbol,
         p.trade_date,
         p.close,

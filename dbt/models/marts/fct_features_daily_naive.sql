@@ -6,16 +6,16 @@
 -- (restated values leak back to the original date). It leaks twice: the
 -- filing lag, and restatements.
 with latest as (
-    select cik, metric, period_start, period_end, value, available_date
+    select security_id, metric, period_start, period_end, value, available_date
     from {{ ref('int_fundamentals__versions') }}
     qualify row_number() over (
-        partition by cik, metric, period_end order by available_ts desc, accession_number desc
+        partition by security_id, metric, period_end order by available_ts desc, accession_number desc
     ) = 1
 ),
 flows as (
     select
         *,
-        coalesce(period_start = lag(period_end) over (partition by cik, metric order by period_end) + 1, false)
+        coalesce(period_start = lag(period_end) over (partition by security_id, metric order by period_end) + 1, false)
             as follows_previous
     from latest
     where metric in ('revenue', 'net_income')
@@ -23,7 +23,7 @@ flows as (
 -- Same four-consecutive-quarters rule as the PIT model; only the leak differs.
 ttm as (
     select
-        cik,
+        security_id,
         metric || '_ttm' as metric,
         period_end,
         case
@@ -34,14 +34,14 @@ ttm as (
         max(available_date) over w as source_available_date
     from flows
     window
-        w as (partition by cik, metric order by period_end rows between 3 preceding and current row),
-        w3 as (partition by cik, metric order by period_end rows between 2 preceding and current row)
+        w as (partition by security_id, metric order by period_end rows between 3 preceding and current row),
+        w3 as (partition by security_id, metric order by period_end rows between 2 preceding and current row)
 ),
 events as (
-    select cik, metric, period_end as event_date, period_end, value, available_date as source_available_date
+    select security_id, metric, period_end as event_date, period_end, value, available_date as source_available_date
     from latest
     union all
-    select cik, metric, period_end as event_date, period_end, value, source_available_date
+    select security_id, metric, period_end as event_date, period_end, value, source_available_date
     from ttm
 ),
 {{ daily_features() }}

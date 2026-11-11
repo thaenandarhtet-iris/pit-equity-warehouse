@@ -7,7 +7,7 @@
 -- derived Q4 can never be known before its 10-K.
 with flows as (
     select
-        cik, metric, duration_class, value, period_start, period_end,
+        security_id, metric, duration_class, value, period_start, period_end,
         accession_number, available_ts, available_date
     from {{ ref('int_facts__mapped') }}
     where duration_class != 'instant'
@@ -15,7 +15,7 @@ with flows as (
 
 direct as (
     select
-        cik, metric, period_start, period_end, value, accession_number,
+        security_id, metric, period_start, period_end, value, accession_number,
         available_ts, available_date,
         false as is_derived,
         cast(null as varchar) as derived_from
@@ -38,7 +38,7 @@ cumulative as (
 ),
 
 prior_periods as (
-    select distinct cik, metric, duration_class, period_start, period_end
+    select distinct security_id, metric, duration_class, period_start, period_end
     from flows
 ),
 
@@ -46,7 +46,7 @@ with_prior_period as (
     select c.*, max(p.period_end) as prior_end
     from cumulative as c
     inner join prior_periods as p
-        on c.cik = p.cik
+        on c.security_id = p.security_id
         and c.metric = p.metric
         and c.period_start = p.period_start
         and c.prior_class = p.duration_class
@@ -63,7 +63,7 @@ known_prior as (
         f.available_date as prior_date
     from with_prior_period as w
     asof left join flows as f
-        on w.cik = f.cik
+        on w.security_id = f.security_id
         and w.metric = f.metric
         and w.period_start = f.period_start
         and w.prior_end = f.period_end
@@ -74,7 +74,7 @@ known_prior as (
 -- version is used and the derived value waits for it.
 first_version as (
     select
-        cik, metric, period_start, period_end,
+        security_id, metric, period_start, period_end,
         arg_min(value, available_ts) as value,
         min(available_ts) as available_ts,
         min(available_date) as available_date
@@ -84,7 +84,7 @@ first_version as (
 
 derived as (
     select
-        k.cik,
+        k.security_id,
         k.metric,
         k.prior_end + 1 as period_start,
         k.period_end,
@@ -96,7 +96,7 @@ derived as (
         k.duration_class as derived_from
     from known_prior as k
     left join first_version as v
-        on k.cik = v.cik
+        on k.security_id = v.security_id
         and k.metric = v.metric
         and k.period_start = v.period_start
         and k.prior_end = v.period_end
@@ -110,7 +110,7 @@ from derived as d
 where not exists (
     select 1
     from direct as q
-    where q.cik = d.cik
+    where q.security_id = d.security_id
         and q.metric = d.metric
         and q.period_end = d.period_end
         and q.available_ts <= d.available_ts

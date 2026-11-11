@@ -52,24 +52,43 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, ticker, start_date]
+            columns: [security_id, ticker, start_date]
     columns:
-      - name: cik
+      - name: security_id
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('stg_universe__securities')
-                field: cik
+                field: security_id
       - name: start_date
         data_tests: [not_null]
 
   - name: stg_universe__securities
     columns:
-      - name: cik
+      - name: security_id
         data_tests: [unique, not_null]
       - name: is_departed
         data_tests: [not_null]
+
+  - name: stg_universe__filers
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, cik]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: security_id
+      - name: cik
+        data_tests:
+          # A filer reports for one security, or its filings would be counted twice.
+          - unique
+          - not_null
 
   - name: stg_prices__daily
     data_tests:

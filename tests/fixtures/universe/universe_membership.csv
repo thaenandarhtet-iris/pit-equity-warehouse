@@ -1,4 +1,4 @@
-cik,ticker,start_date,end_date,resolution
+security_id,ticker,start_date,end_date,resolution
 320193,AAPL,1996-01-02,,fixture
 1637459,KHC,2015-07-06,,fixture
 789019,MSFT,1996-01-02,,fixture

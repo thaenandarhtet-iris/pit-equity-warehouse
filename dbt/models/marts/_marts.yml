@@ -16,7 +16,7 @@ models:
           - relationships:
               arguments:
                 to: ref('stg_universe__securities')
-                field: cik
+                field: security_id
       - name: trade_date
         data_tests: [not_null]
 
@@ -35,7 +35,7 @@ models:
           - relationships:
               arguments:
                 to: ref('stg_universe__securities')
-                field: cik
+                field: security_id
       - name: valid_from
         data_tests: [not_null]
       - name: is_member
@@ -54,7 +54,7 @@ models:
           - relationships:
               arguments:
                 to: ref('stg_universe__securities')
-                field: cik
+                field: security_id
       - name: trade_date
         data_tests: [not_null]
 
@@ -101,7 +101,7 @@ unit_tests:
     given:
       - input: ref('stg_universe__securities')
         rows:
-          - {cik: 1, price_symbol: AAA}
+          - {security_id: 1, price_symbol: AAA}
       - input: ref('stg_prices__daily')
         rows:
           # First session: no previous close, so no return.
@@ -129,17 +129,17 @@ unit_tests:
     given:
       - input: ref('stg_universe__securities')
         rows:
-          - {cik: 1, security_name: Meta, is_departed: false, price_symbol: META}
-          - {cik: 2, security_name: Gone, is_departed: true, price_symbol: null}
-          - {cik: 3, security_name: Alphabet, is_departed: false, price_symbol: GOOGL}
+          - {security_id: 1, security_name: Meta, is_departed: false, price_symbol: META}
+          - {security_id: 2, security_name: Gone, is_departed: true, price_symbol: null}
+          - {security_id: 3, security_name: Alphabet, is_departed: false, price_symbol: GOOGL}
       - input: ref('stg_universe__membership')
         rows:
-          - {cik: 1, ticker: FB, start_date: "2013-12-23", end_date: "2022-06-09"}
-          - {cik: 1, ticker: META, start_date: "2022-06-09", end_date: null}
-          - {cik: 2, ticker: XYZ, start_date: "2015-03-02", end_date: "2017-01-03"}
-          - {cik: 2, ticker: XYZ, start_date: "2018-06-01", end_date: "2020-09-21"}
-          - {cik: 3, ticker: GOOGL, start_date: "2014-04-03", end_date: null}
-          - {cik: 3, ticker: GOOG, start_date: "2015-12-01", end_date: null}
+          - {security_id: 1, ticker: FB, start_date: "2013-12-23", end_date: "2022-06-09"}
+          - {security_id: 1, ticker: META, start_date: "2022-06-09", end_date: null}
+          - {security_id: 2, ticker: XYZ, start_date: "2015-03-02", end_date: "2017-01-03"}
+          - {security_id: 2, ticker: XYZ, start_date: "2018-06-01", end_date: "2020-09-21"}
+          - {security_id: 3, ticker: GOOGL, start_date: "2014-04-03", end_date: null}
+          - {security_id: 3, ticker: GOOG, start_date: "2015-12-01", end_date: null}
     expect:
       rows:
         - {security_id: 1, valid_from: "2013-12-23", valid_to: "2022-06-09", tickers: FB, is_member: true, is_current: false}
@@ -207,16 +207,16 @@ unit_tests:
           - {security_id: 2, trade_date: "2023-05-01", close: 5}
       - input: ref('int_fundamentals__snapshot_events')
         rows:
-          - {cik: 1, metric: total_liabilities, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
-          - {cik: 1, metric: stockholders_equity, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
-          - {cik: 1, metric: shares_outstanding, event_date: "2023-05-01", period_end: "2023-04-20", value: 10, available_date: "2023-05-01"}
-          - {cik: 2, metric: stockholders_equity, event_date: "2023-02-01", period_end: "2022-12-31", value: -4, available_date: "2023-02-01"}
-          - {cik: 2, metric: total_liabilities, event_date: "2023-02-01", period_end: "2022-12-31", value: 8, available_date: "2023-02-01"}
-          - {cik: 2, metric: shares_outstanding, event_date: "2023-02-01", period_end: "2023-01-20", value: 2, available_date: "2023-02-01"}
+          - {security_id: 1, metric: total_liabilities, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {security_id: 1, metric: stockholders_equity, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {security_id: 1, metric: shares_outstanding, event_date: "2023-05-01", period_end: "2023-04-20", value: 10, available_date: "2023-05-01"}
+          - {security_id: 2, metric: stockholders_equity, event_date: "2023-02-01", period_end: "2022-12-31", value: -4, available_date: "2023-02-01"}
+          - {security_id: 2, metric: total_liabilities, event_date: "2023-02-01", period_end: "2022-12-31", value: 8, available_date: "2023-02-01"}
+          - {security_id: 2, metric: shares_outstanding, event_date: "2023-02-01", period_end: "2023-01-20", value: 2, available_date: "2023-02-01"}
       - input: ref('int_fundamentals__ttm_events')
         rows:
-          - {cik: 1, metric: net_income_ttm, event_date: "2023-05-01", period_end: "2023-03-31", value: 20, source_available_date: "2023-05-01"}
-          - {cik: 2, metric: net_income_ttm, event_date: "2023-02-01", period_end: "2022-12-31", value: -1, source_available_date: "2023-02-01"}
+          - {security_id: 1, metric: net_income_ttm, event_date: "2023-05-01", period_end: "2023-03-31", value: 20, source_available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income_ttm, event_date: "2023-02-01", period_end: "2022-12-31", value: -1, source_available_date: "2023-02-01"}
     expect:
       rows:
         - {trade_date: "2023-04-28", security_id: 1, close: 29, market_cap: null, pe_ttm: null, pb: null, debt_to_equity: null, stockholders_equity_source_available_date: null}

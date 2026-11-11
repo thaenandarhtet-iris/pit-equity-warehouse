@@ -9,7 +9,7 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, metric, period_start, period_end, accession_number]
+            columns: [security_id, metric, period_start, period_end, accession_number]
     columns:
       - name: value
         data_tests: [not_null]
@@ -29,7 +29,7 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, metric, period_end, accession_number]
+            columns: [security_id, metric, period_end, accession_number]
     columns:
       - name: version_number
         data_tests: [not_null]
@@ -43,7 +43,7 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, metric, event_date]
+            columns: [security_id, metric, event_date]
     columns:
       - name: value
         data_tests: [not_null]
@@ -57,7 +57,7 @@ models:
     data_tests:
       - unique_combination:
           arguments:
-            columns: [cik, metric, event_date]
+            columns: [security_id, metric, event_date]
     columns:
       - name: metric
         data_tests:
@@ -72,19 +72,19 @@ unit_tests:
       - input: ref('int_facts__mapped')
         rows:
           # Q1 10-Q reports the quarter directly.
-          - {cik: 1, metric: net_income, duration_class: quarter, value: 100, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
+          - {security_id: 1, metric: net_income, duration_class: quarter, value: 100, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
           # Q2 10-Q reports only six months year-to-date.
-          - {cik: 1, metric: net_income, duration_class: ytd_6m, value: 250, period_start: 2023-01-01, period_end: 2023-06-30, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
+          - {security_id: 1, metric: net_income, duration_class: ytd_6m, value: 250, period_start: 2023-01-01, period_end: 2023-06-30, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
           # Q3 10-Q reports both the quarter and nine months.
-          - {cik: 1, metric: net_income, duration_class: quarter, value: 150, period_start: 2023-07-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
-          - {cik: 1, metric: net_income, duration_class: ytd_9m, value: 400, period_start: 2023-01-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: net_income, duration_class: quarter, value: 150, period_start: 2023-07-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: net_income, duration_class: ytd_9m, value: 400, period_start: 2023-01-01, period_end: 2023-09-30, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
           # The 10-K has only the full year; Q4 must be derived.
-          - {cik: 1, metric: net_income, duration_class: fiscal_year, value: 560, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          - {security_id: 1, metric: net_income, duration_class: fiscal_year, value: 560, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
           # Next year's 10-K restates the 2023 full year as a comparative.
-          - {cik: 1, metric: net_income, duration_class: fiscal_year, value: 570, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy24, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18}
+          - {security_id: 1, metric: net_income, duration_class: fiscal_year, value: 570, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy24, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18}
           # EPS cannot be derived by subtraction; only the reported quarter survives.
-          - {cik: 1, metric: eps_diluted, duration_class: quarter, value: 1.0, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
-          - {cik: 1, metric: eps_diluted, duration_class: fiscal_year, value: 5.5, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          - {security_id: 1, metric: eps_diluted, duration_class: quarter, value: 1.0, period_start: 2023-01-01, period_end: 2023-03-31, accession_number: q1, available_ts: "2023-05-01 20:00:00", available_date: 2023-05-02}
+          - {security_id: 1, metric: eps_diluted, duration_class: fiscal_year, value: 5.5, period_start: 2023-01-01, period_end: 2023-12-31, accession_number: fy23, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
     expect:
       rows:
         - {metric: net_income, period_start: 2023-01-01, period_end: 2023-03-31, value: 100, is_derived: false, accession_number: q1, available_ts: "2023-05-01 20:00:00"}
@@ -99,13 +99,13 @@ unit_tests:
     given:
       - input: ref('int_facts__discrete_quarters')
         rows:
-          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02, is_derived: false}
-          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150.0000001, accession_number: k1, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16, is_derived: false}
-          - {cik: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 155, accession_number: k2, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18, is_derived: false}
+          - {security_id: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02, is_derived: false}
+          - {security_id: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 150.0000001, accession_number: k1, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16, is_derived: false}
+          - {security_id: 1, metric: net_income, period_start: 2023-07-01, period_end: 2023-09-30, value: 155, accession_number: k2, available_ts: "2025-02-14 21:00:00", available_date: 2025-02-18, is_derived: false}
       - input: ref('int_facts__mapped')
         rows:
-          - {cik: 1, metric: total_assets, duration_class: instant, period_start: null, period_end: 2023-09-30, value: 500, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
-          - {cik: 1, metric: net_income, duration_class: quarter, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: total_assets, duration_class: instant, period_start: null, period_end: 2023-09-30, value: 500, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: net_income, duration_class: quarter, period_start: 2023-07-01, period_end: 2023-09-30, value: 150, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
     expect:
       rows:
         - {metric: net_income, accession_number: q3, version_number: 1, is_restatement: false}
@@ -124,14 +124,14 @@ unit_tests:
           - {session_date: 2024-02-16, market_open_utc: "2024-02-16 14:30:00"}
       - input: ref('int_fundamentals__versions')
         rows:
-          - {cik: 1, metric: revenue, period_end: 2023-06-30, value: 10, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
-          - {cik: 1, metric: revenue, period_end: 2023-09-30, value: 11, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: revenue, period_end: 2023-06-30, value: 10, accession_number: q2, available_ts: "2023-08-01 20:00:00", available_date: 2023-08-02}
+          - {security_id: 1, metric: revenue, period_end: 2023-09-30, value: 11, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
           # The 10-K repeats an older quarter as a comparative. A plain
           # "latest filed" lookup would jump back to 2022-09-30 here.
-          - {cik: 1, metric: revenue, period_end: 2022-09-30, value: 99, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
-          - {cik: 1, metric: net_income, period_end: 2023-09-30, value: 5, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
+          - {security_id: 1, metric: revenue, period_end: 2022-09-30, value: 99, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          - {security_id: 1, metric: net_income, period_end: 2023-09-30, value: 5, accession_number: q3, available_ts: "2023-11-01 20:00:00", available_date: 2023-11-02}
           # The same 10-K restates the latest quarter, which must replace it.
-          - {cik: 1, metric: net_income, period_end: 2023-09-30, value: 6, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
+          - {security_id: 1, metric: net_income, period_end: 2023-09-30, value: 6, accession_number: k, available_ts: "2024-02-15 21:00:00", available_date: 2024-02-16}
     expect:
       rows:
         - {metric: revenue, event_date: 2023-08-02, period_end: 2023-06-30, value: 10}
@@ -158,24 +158,24 @@ unit_tests:
           - {session_date: "2023-06-01", market_open_utc: "2023-06-01 13:30:00"}
       - input: ref('int_fundamentals__versions')
         rows:
-          - {cik: 1, metric: revenue, period_start: "2022-01-01", period_end: "2022-03-31", value: 10, accession_number: a1, available_ts: "2022-04-29 21:00:00", available_date: "2022-05-02"}
-          - {cik: 1, metric: revenue, period_start: "2022-04-01", period_end: "2022-06-30", value: 20, accession_number: a2, available_ts: "2022-07-29 21:00:00", available_date: "2022-08-01"}
-          - {cik: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 30, accession_number: a3, available_ts: "2022-10-31 21:00:00", available_date: "2022-11-01"}
-          - {cik: 1, metric: revenue, period_start: "2022-10-01", period_end: "2022-12-31", value: 40, accession_number: a4, available_ts: "2023-01-31 21:00:00", available_date: "2023-02-01"}
-          - {cik: 1, metric: revenue, period_start: "2023-01-01", period_end: "2023-03-31", value: 50, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
-          - {cik: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 35, accession_number: a6, available_ts: "2023-05-31 21:00:00", available_date: "2023-06-01"}
+          - {security_id: 1, metric: revenue, period_start: "2022-01-01", period_end: "2022-03-31", value: 10, accession_number: a1, available_ts: "2022-04-29 21:00:00", available_date: "2022-05-02"}
+          - {security_id: 1, metric: revenue, period_start: "2022-04-01", period_end: "2022-06-30", value: 20, accession_number: a2, available_ts: "2022-07-29 21:00:00", available_date: "2022-08-01"}
+          - {security_id: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 30, accession_number: a3, available_ts: "2022-10-31 21:00:00", available_date: "2022-11-01"}
+          - {security_id: 1, metric: revenue, period_start: "2022-10-01", period_end: "2022-12-31", value: 40, accession_number: a4, available_ts: "2023-01-31 21:00:00", available_date: "2023-02-01"}
+          - {security_id: 1, metric: revenue, period_start: "2023-01-01", period_end: "2023-03-31", value: 50, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 1, metric: revenue, period_start: "2022-07-01", period_end: "2022-09-30", value: 35, accession_number: a6, available_ts: "2023-05-31 21:00:00", available_date: "2023-06-01"}
           # Balance-sheet metrics have no TTM.
-          - {cik: 1, metric: total_assets, period_start: null, period_end: "2023-03-31", value: 999, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
-          - {cik: 2, metric: net_income, period_start: "2022-01-01", period_end: "2022-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
-          - {cik: 2, metric: net_income, period_start: "2022-04-01", period_end: "2022-06-30", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
-          - {cik: 2, metric: net_income, period_start: "2022-10-01", period_end: "2022-12-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
-          - {cik: 2, metric: net_income, period_start: "2023-01-01", period_end: "2023-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 1, metric: total_assets, period_start: null, period_end: "2023-03-31", value: 999, accession_number: a5, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income, period_start: "2022-01-01", period_end: "2022-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income, period_start: "2022-04-01", period_end: "2022-06-30", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income, period_start: "2022-10-01", period_end: "2022-12-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income, period_start: "2023-01-01", period_end: "2023-03-31", value: 1, accession_number: b1, available_ts: "2023-04-28 21:00:00", available_date: "2023-05-01"}
     expect:
       rows:
-        - {cik: 1, metric: revenue_ttm, event_date: "2022-05-02", value: null}
-        - {cik: 1, metric: revenue_ttm, event_date: "2022-08-01", value: null}
-        - {cik: 1, metric: revenue_ttm, event_date: "2022-11-01", value: null}
-        - {cik: 1, metric: revenue_ttm, event_date: "2023-02-01", value: 100}
-        - {cik: 1, metric: revenue_ttm, event_date: "2023-05-01", value: 140}
-        - {cik: 1, metric: revenue_ttm, event_date: "2023-06-01", value: 145}
-        - {cik: 2, metric: net_income_ttm, event_date: "2023-05-01", value: null}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2022-05-02", value: null}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2022-08-01", value: null}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2022-11-01", value: null}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2023-02-01", value: 100}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2023-05-01", value: 140}
+        - {security_id: 1, metric: revenue_ttm, event_date: "2023-06-01", value: 145}
+        - {security_id: 2, metric: net_income_ttm, event_date: "2023-05-01", value: null}

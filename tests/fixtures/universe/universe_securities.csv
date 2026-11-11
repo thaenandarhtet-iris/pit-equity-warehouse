@@ -1,4 +1,4 @@
-cik,name,is_departed,price_symbol
+security_id,name,is_departed,price_symbol
 320193,Apple Inc.,False,AAPL
 789019,MICROSOFT CORP,False,MSFT
 1045810,NVIDIA CORP,False,NVDA
