@@ -157,3 +157,11 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Mergers, separate securities:** the interval is split and the predecessor becomes its own departed security: old DuPont (DD until 2017-09-01), Baker Hughes Inc (BHGE until 2017-07-03), 21st Century Fox (FOXA and FOX until 2019-03-20). The sample is 200 drawn securities, 203 after these splits.
 - **Why:** the resolver had mapped XOM to ExxonMobil Holdings, whose first 10-Q is 2026-07-01, which would leave Exxon with no fundamentals for 2015-2026. `build-universe` now stops if any filer starts reporting more than 120 days into the in-window part of its interval, so new cases are caught.
 - **Alternatives:** one CIK per security, chosen by which filed most of the window (loses fundamentals on one side of each handoff); leave the 9 as a README limitation.
+
+## 2026-11-10: 22 departed securities have no prices; accepted as a limitation
+- **Decision:** the 22 departed securities Tiingo can't serve (their tickers now belong to other companies, e.g. TE, HOT, PARA) keep their membership and fundamentals with null returns. No second price vendor.
+- **Why:** a second vendor is a new dependency for 22 names, and SPEC says to add one only when it's really needed. The README states the count and the bias: failed and acquired names stay in the universe but are under-represented in any return statistic.
+
+## 2026-11-10: The sample is 203 securities
+- **Decision:** keep the 200 seeded draws plus the 3 merged-away predecessors split out of them (old DuPont, Baker Hughes Inc, 21st Century Fox), rather than re-drawing to exactly 200.
+- **Why:** re-drawing would change the seeded sample to hit a round number; the split-out securities are real former index members.
