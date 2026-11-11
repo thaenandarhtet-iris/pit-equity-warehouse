@@ -72,9 +72,9 @@ def land_fixtures() -> None:
 @app.command("build-universe")
 def build_universe() -> None:
     """Sample the S&P 500 history, resolve every ticker interval to a CIK, write Parquet."""
-    pool = universe.in_window(
-        universe.membership_intervals(universe.load_snapshots(universe.fetch_snapshots()))
-    )
+    snapshots = universe.load_snapshots(universe.fetch_snapshots())
+    pool = universe.in_window(universe.membership_intervals(snapshots))
+    window_end = pd.to_datetime(snapshots["date"]).max().date()
     resolver = universe.Resolver(sec.SecClient.from_env(), prices.TiingoClient.from_env())
     try:
         members = universe.select_universe(pool, resolver.resolve, resolver.same_company)
@@ -86,7 +86,7 @@ def build_universe() -> None:
         for t, s in zip(members.ticker, members.start_date, strict=True)
     ]
     supported = prices.supported_tickers(config.RAW_DIR / "tiingo")
-    securities = universe.securities_table(members, resolver, supported)
+    securities = universe.securities_table(members, resolver, supported, window_end=window_end)
 
     config.PARQUET_DIR.mkdir(parents=True, exist_ok=True)
     members.to_parquet(config.PARQUET_DIR / "universe_membership.parquet", index=False)

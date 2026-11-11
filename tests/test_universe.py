@@ -146,6 +146,12 @@ SUPPORTED = pd.DataFrame(
         ("DOW", "1972-06-01", "2017-08-31"),
         ("DOW", "2019-03-20", "2026-11-09"),
         ("TWTR", "2013-11-07", "2022-10-28"),
+        # COR: Cencora (renamed from ABC, history back to 1995) is still trading;
+        # the other row is CoreSite, which used COR until 2021.
+        ("COR", "2010-09-23", "2021-12-28"),
+        ("COR", "1995-04-04", "2026-11-09"),
+        # Kenvue's prices stop after the universe window ends (2026-08-18).
+        ("KVUE", "2023-05-04", "2026-10-30"),
     ],
     columns=["ticker", "startDate", "endDate"],
 )
@@ -156,6 +162,31 @@ def test_price_coverage_uses_the_row_tiingo_actually_serves():
     assert not price_coverage(SUPPORTED, "DOW", date(2015, 1, 2), date(2017, 8, 31))
     assert price_coverage(SUPPORTED, "DOW", date(2019, 4, 2), None, today=date(2026, 11, 9))
     assert price_coverage(SUPPORTED, "TWTR", date(2015, 1, 2), date(2022, 10, 28))
+
+
+def test_price_coverage_follows_the_row_still_trading():
+    # The served row is the active one, even when an older holder started later.
+    assert price_coverage(SUPPORTED, "COR", date(2015, 1, 2), None, today=date(2026, 11, 9))
+
+
+def test_open_membership_needs_prices_only_to_the_window_end():
+    members = pd.DataFrame(
+        {
+            "cik": [1944048],
+            "ticker": ["KVUE"],
+            "start_date": [date(2023, 8, 25)],
+            "end_date": [None],
+        }
+    )
+
+    class _Resolver:
+        sec_map = {"KVUE": 1944048}
+
+        def name(self, cik):
+            return "Kenvue Inc."
+
+    securities = securities_table(members, _Resolver(), SUPPORTED, window_end=date(2026, 8, 18))
+    assert securities.price_symbol.tolist() == ["KVUE"]
 
 
 class _NamesOnly:

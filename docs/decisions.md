@@ -57,8 +57,9 @@ Short log of non-obvious choices. Newest at the bottom.
 - **Alternatives:** Power plan ($30/month, 10,000 requests/hour); the `token=` query parameter.
 - **Why:** published Starter limits (tiingo.com/about/pricing, checked 2026-11-10) are 50 requests/hour, 1,000/day and 500 unique symbols/month, enough for ~200 symbols if fetched once and cached. Staying under 50 leaves room for a manual request. A query-string key would land in httpx's request logs.
 
-## 2026-11-10: Tiingo serves delisted names, but only the newest holder of a reused ticker
-- **Decision:** pick each security's price symbol by checking the row Tiingo actually serves (latest `startDate` in `supported_tickers.csv`) against the membership window; securities with no covering symbol are reported, not dropped silently.
+## 2026-11-10: Tiingo serves delisted names, but only the current holder of a reused ticker
+- **Decision:** pick each security's price symbol by checking the row Tiingo actually serves against the membership window (up to the window end for current members); securities with no covering symbol are reported, not dropped silently. The served row is the one with the latest `endDate` (latest `startDate` on a tie).
+- **Correction (same day):** the first version used the latest `startDate`. That holds for DOW but not when a renamed company's history starts before the old holder's: COR has CoreSite (2010-2021) and Cencora (from 1995, ABC's history). The old rule marked Cencora, Healthpeak (DOC), DuPont (DD) and EchoStar unpriced. It also checked current members up to today instead of the window end, which marked Kenvue (prices end 2026-10-30) unpriced.
 - **Evidence:** TWTR (ended 2022-10-28) and CELG (ended 2019-11-22) return full histories on the free plan. `supported_tickers.csv` has two DOW rows (Dow Chemical 1972-2017, Dow Inc 2019-), and a 2016 request for DOW returns `[]`. Renamed companies keep their whole history under the new ticker (META from 2012; FB is now an unrelated ETF).
 
 ## 2026-11-10: Sample by CIK: 30 departed first, then 170 from the whole pool

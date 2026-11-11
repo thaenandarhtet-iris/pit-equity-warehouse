@@ -132,13 +132,18 @@ def price_coverage(
 ) -> bool:
     """True if the price history Tiingo serves for `symbol` spans start..end.
 
-    Tiingo lists a reused ticker once per company but serves only the newest,
-    so coverage is judged on the row with the latest start date.
+    Tiingo lists a reused ticker once per company but serves only the one
+    still trading, so coverage is judged on the row with the latest end date
+    (latest start date on a tie). A renamed company's row can start earlier
+    than the old holder's (COR: Cencora from 1995, CoreSite 2010-2021).
     """
     rows = supported[supported["ticker"] == symbol]
     if rows.empty:
         return False
-    served = rows.loc[pd.to_datetime(rows["startDate"]).idxmax()]
+    order = rows.assign(
+        _end=pd.to_datetime(rows["endDate"]), _start=pd.to_datetime(rows["startDate"])
+    )
+    served = order.sort_values(["_end", "_start"]).iloc[-1]
     first = pd.Timestamp(served["startDate"]).date()
     last = pd.Timestamp(served["endDate"]).date()
     return first <= start + tolerance and last >= (end or today or date.today()) - tolerance
@@ -335,7 +340,10 @@ class Resolver:
     def same_company(self, ticker: str, start: date, end: date | None, cik: int) -> bool:
         key = (ticker, start)
         if key in self.overrides:
-            return self.overrides[key] == cik
+            linked = self.overrides[key] == cik
+            if linked:
+                self.method[key] = "override"
+            return linked
         if filenames_cite(self.filings(cik)[1], ticker, start, end):
             self.method[key] = "rename_filename"
             return True
@@ -347,14 +355,19 @@ def securities_table(
     resolver: Resolver,
     supported: pd.DataFrame,
     start: date = config.START_DATE,
+    window_end: date | None = None,
 ) -> pd.DataFrame:
-    """One row per CIK: name, departure status, and the Tiingo symbol for its prices."""
+    """One row per CIK: name, departure status, and the Tiingo symbol for its prices.
+
+    A current member needs prices only up to window_end (the last membership
+    snapshot): later delistings are outside the universe.
+    """
     by_cik = {c: t for t, c in resolver.sec_map.items()}
     rows = []
     for cik, g in members.groupby("cik"):
         is_departed = bool(g["end_date"].notna().all())
         need_from = max(min(g["start_date"]), start)
-        need_to = max(g["end_date"]) if is_departed else None
+        need_to = max(g["end_date"]) if is_departed else window_end
         # Tiingo files a renamed company's whole history under its newest ticker.
         candidates = [by_cik[cik]] if cik in by_cik else []
         candidates += list(g.sort_values("start_date", ascending=False)["ticker"])
