@@ -1,0 +1,22 @@
+ticker,start_date,cik,valid_from,same_security,note
+AVGO,2014-05-08,1441634,2014-05-08,true,Avago Technologies Ltd; 25-NSE 2016-01-29
+AVGO,2014-05-08,1649338,2016-02-02,true,Broadcom Ltd (Singapore holdco) 8-K12B 2016-02-02
+AVGO,2014-05-08,1730168,2018-04-04,true,Broadcom Inc redomiciled to US; 8-K12B 2018-04-04
+XRX,1996-01-02,108772,1996-01-02,true,Xerox Corp; continues filing as a subsidiary after the handoff
+XRX,1996-01-02,1770450,2019-07-31,true,Xerox Holdings Corp holdco; 8-K12B 2019-07-31
+BG,2023-03-15,1144519,2023-03-15,true,Bunge Ltd (Bermuda); 25-NSE 2023-11-01
+BG,2023-03-15,1996862,2023-11-01,true,Bunge Global SA redomiciled to Switzerland; 8-K12G3 2023-11-01
+BLK,2011-04-04,1364742,2011-04-04,true,BlackRock (now BlackRock Finance Inc) continues as a subsidiary; 25-NSE 2024-10-02
+BLK,2011-04-04,2012383,2024-10-01,true,New BlackRock Inc holdco (GIP acquisition); 8-K12B 2024-10-01
+XOM,1996-01-02,34088,1996-01-02,true,Exxon Mobil Corp; 25-NSE 2026-07-02
+XOM,1996-01-02,2115436,2026-07-01,true,ExxonMobil Holdings Corp holdco; 8-K12B 2026-07-01
+MYL,2004-04-23,69499,2004-04-23,true,Mylan Inc; 15-12B and 25-NSE 2015-02-27; continues as a subsidiary
+MYL,2004-04-23,1623613,2015-02-27,true,Mylan N.V. inversion; first 10-K as listed parent after 2015-02-27
+DD,1996-01-02,30554,1996-01-02,false,E. I. du Pont (now EIDP Inc); 25-NSE 2017-09-01 on the DowDuPont merger
+DD,1996-01-02,1666700,2017-09-01,false,DowDuPont 8-K12B 2017-09-01; a new merged company
+BHGE,1996-01-02,808362,1996-01-02,false,Baker Hughes Inc; 25-NSE 2017-07-05; merged with GE Oil & Gas
+BHGE,1996-01-02,1701605,2017-07-03,false,Baker Hughes a GE Co; 8-K12B 2017-07-03
+FOXA,2004-12-20,1308161,2004-12-20,false,Twenty-First Century Fox; 25-NSE 2019-03-20 on the Disney acquisition
+FOXA,2004-12-20,1754301,2019-03-20,false,Fox Corp spun off from 21CF
+FOX,2015-09-21,1308161,2015-09-21,false,Twenty-First Century Fox class B; 25-NSE 2019-03-20
+FOX,2015-09-21,1754301,2019-03-20,false,Fox Corp class B

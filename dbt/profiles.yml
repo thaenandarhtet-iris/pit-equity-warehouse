@@ -1,0 +1,9 @@
+pitwh:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Relative paths resolve against the shell's cwd, not this file, so the
+      # Makefile and CI always pass an absolute DUCKDB_PATH.
+      path: "{{ env_var('DUCKDB_PATH', '../data/pitwh.duckdb') }}"
+      threads: 4

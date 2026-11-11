@@ -1,0 +1,10 @@
+metric,taxonomy,tag,priority,period_type,unit
+revenue,us-gaap,Revenues,1,duration,USD
+revenue,us-gaap,RevenueFromContractWithCustomerExcludingAssessedTax,2,duration,USD
+revenue,us-gaap,SalesRevenueNet,3,duration,USD
+net_income,us-gaap,NetIncomeLoss,1,duration,USD
+eps_diluted,us-gaap,EarningsPerShareDiluted,1,duration,USD/shares
+total_assets,us-gaap,Assets,1,instant,USD
+total_liabilities,us-gaap,Liabilities,1,instant,USD
+stockholders_equity,us-gaap,StockholdersEquity,1,instant,USD
+shares_outstanding,dei,EntityCommonStockSharesOutstanding,1,instant,shares

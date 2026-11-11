@@ -1,0 +1,246 @@
+version: 2
+
+models:
+  - name: fct_prices_daily
+    description: >
+      Raw close and a daily total return computed only from that day's and the
+      previous session's raw fields. security_id is the CIK.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, trade_date]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: security_id
+      - name: trade_date
+        data_tests: [not_null]
+
+  - name: dim_security
+    description: >
+      SCD2 on CIK (security_id). One row per interval [valid_from, valid_to)
+      over which the set of index tickers is unchanged.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, valid_from]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: security_id
+      - name: valid_from
+        data_tests: [not_null]
+      - name: is_member
+        data_tests: [not_null]
+
+  - name: fct_universe_daily
+    description: One row per (trade_date, security_id) for index members, departed names included.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [trade_date, security_id]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_universe__securities')
+                field: security_id
+      - name: trade_date
+        data_tests: [not_null]
+
+  - name: fct_features_daily
+    description: >
+      Point-in-time features per (trade_date, security_id), built with ASOF
+      LEFT JOIN onto the snapshot events. Each metric has a
+      <metric>_source_available_date column for auditing.
+    columns:
+      - name: security_id
+        data_tests: [not_null]
+      - name: trade_date
+        data_tests: [not_null]
+
+  - name: fct_features_daily_naive
+    description: >
+      Deliberately leaky comparison model: values keyed on period_end, latest
+      version always. Exists only for rpt_leakage_summary and to prove
+      assert_no_lookahead can fail.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [trade_date, security_id]
+
+  - name: rpt_leakage_summary
+    description: Naive vs PIT per metric, the leakage numbers for SPEC section 9 and the README.
+    columns:
+      - name: metric
+        data_tests: [unique, not_null]
+      - name: lookahead_rows
+        data_tests:
+          - column_satisfies:
+              arguments:
+                condition: ">= 0"
+
+unit_tests:
+  - name: test_total_return_handles_splits_and_dividends
+    description: >
+      Prices are chosen so every return is exact in binary floating point. The
+      last row has a 4:1 split and a dividend on the same day; SPEC's literal
+      formula (close * split + div) / prev_close would give about 0.1165 there.
+      BBB is not a sampled security, so it is dropped.
+    model: fct_prices_daily
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {security_id: 1, price_symbol: AAA}
+      - input: ref('stg_prices__daily')
+        rows:
+          # First session: no previous close, so no return.
+          - {price_symbol: AAA, trade_date: "2020-01-02", close: 64, div_cash: 0, split_factor: 1}
+          # 64 -> 80.
+          - {price_symbol: AAA, trade_date: "2020-01-03", close: 80, div_cash: 0, split_factor: 1}
+          # Ex-dividend: (88 + 2) / 80.
+          - {price_symbol: AAA, trade_date: "2020-01-06", close: 88, div_cash: 2, split_factor: 1}
+          # After a gap: 4:1 split plus 0.25 per new share, (24.5 + 0.25) * 4 / 88.
+          - {price_symbol: AAA, trade_date: "2020-01-13", close: 24.5, div_cash: 0.25, split_factor: 4}
+          - {price_symbol: BBB, trade_date: "2020-01-02", close: 10, div_cash: 0, split_factor: 1}
+    expect:
+      rows:
+        - {security_id: 1, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 1, trade_date: "2020-01-03", daily_return: 0.25}
+        - {security_id: 1, trade_date: "2020-01-06", daily_return: 0.125}
+        - {security_id: 1, trade_date: "2020-01-13", daily_return: 0.125}
+
+  - name: test_two_securities_sharing_a_price_symbol_each_get_their_own_returns
+    description: >
+      Old DuPont and DuPont de Nemours both use Tiingo's DD series. Each
+      security's previous close must come from its own rows, not from the other
+      security's copy of the same day.
+    model: fct_prices_daily
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {security_id: 30554, price_symbol: DD}
+          - {security_id: 1666700, price_symbol: DD}
+      - input: ref('stg_prices__daily')
+        rows:
+          - {price_symbol: DD, trade_date: "2020-01-02", close: 64, div_cash: 0, split_factor: 1}
+          - {price_symbol: DD, trade_date: "2020-01-03", close: 80, div_cash: 0, split_factor: 1}
+    expect:
+      rows:
+        - {security_id: 30554, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 30554, trade_date: "2020-01-03", daily_return: 0.25}
+        - {security_id: 1666700, trade_date: "2020-01-02", daily_return: null}
+        - {security_id: 1666700, trade_date: "2020-01-03", daily_return: 0.25}
+
+  - name: test_dim_security_splits_history_at_every_change
+    description: >
+      CIK 1 is renamed (FB to META, contiguous because end dates are exclusive).
+      CIK 2 leaves the index and rejoins, then leaves for good. CIK 3 has two
+      share classes in the index at once.
+    model: dim_security
+    given:
+      - input: ref('stg_universe__securities')
+        rows:
+          - {security_id: 1, security_name: Meta, is_departed: false, price_symbol: META}
+          - {security_id: 2, security_name: Gone, is_departed: true, price_symbol: null}
+          - {security_id: 3, security_name: Alphabet, is_departed: false, price_symbol: GOOGL}
+      - input: ref('stg_universe__membership')
+        rows:
+          - {security_id: 1, ticker: FB, start_date: "2013-12-23", end_date: "2022-06-09"}
+          - {security_id: 1, ticker: META, start_date: "2022-06-09", end_date: null}
+          - {security_id: 2, ticker: XYZ, start_date: "2015-03-02", end_date: "2017-01-03"}
+          - {security_id: 2, ticker: XYZ, start_date: "2018-06-01", end_date: "2020-09-21"}
+          - {security_id: 3, ticker: GOOGL, start_date: "2014-04-03", end_date: null}
+          - {security_id: 3, ticker: GOOG, start_date: "2015-12-01", end_date: null}
+    expect:
+      rows:
+        - {security_id: 1, valid_from: "2013-12-23", valid_to: "2022-06-09", tickers: FB, is_member: true, is_current: false}
+        - {security_id: 1, valid_from: "2022-06-09", valid_to: null, tickers: META, is_member: true, is_current: true}
+        - {security_id: 2, valid_from: "2015-03-02", valid_to: "2017-01-03", tickers: XYZ, is_member: true, is_current: false}
+        - {security_id: 2, valid_from: "2017-01-03", valid_to: "2018-06-01", tickers: null, is_member: false, is_current: false}
+        - {security_id: 2, valid_from: "2018-06-01", valid_to: "2020-09-21", tickers: XYZ, is_member: true, is_current: false}
+        - {security_id: 2, valid_from: "2020-09-21", valid_to: null, tickers: null, is_member: false, is_current: true}
+        - {security_id: 3, valid_from: "2014-04-03", valid_to: "2015-12-01", tickers: GOOGL, is_member: true, is_current: false}
+        - {security_id: 3, valid_from: "2015-12-01", valid_to: null, tickers: "GOOG,GOOGL", is_member: true, is_current: true}
+
+  - name: test_universe_grid_has_members_only_inside_the_window
+    description: >
+      Security 2 leaves on 2020-01-07 (exclusive) and is back from 2020-01-09;
+      the window ends 2020-01-09. Weekend sessions don't exist in the calendar.
+    model: fct_universe_daily
+    overrides:
+      vars:
+        universe_start: "2020-01-03"
+        universe_end: "2020-01-09"
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: "2020-01-02"}
+          - {session_date: "2020-01-03"}
+          - {session_date: "2020-01-06"}
+          - {session_date: "2020-01-07"}
+          - {session_date: "2020-01-08"}
+          - {session_date: "2020-01-09"}
+          - {session_date: "2020-01-10"}
+      - input: ref('dim_security')
+        rows:
+          - {security_id: 1, valid_from: "2019-01-02", valid_to: null, tickers: AAA, is_member: true}
+          - {security_id: 2, valid_from: "2019-01-02", valid_to: "2020-01-07", tickers: BBB, is_member: true}
+          - {security_id: 2, valid_from: "2020-01-07", valid_to: "2020-01-09", tickers: null, is_member: false}
+          - {security_id: 2, valid_from: "2020-01-09", valid_to: null, tickers: BBB, is_member: true}
+    expect:
+      rows:
+        - {trade_date: "2020-01-03", security_id: 1}
+        - {trade_date: "2020-01-06", security_id: 1}
+        - {trade_date: "2020-01-07", security_id: 1}
+        - {trade_date: "2020-01-08", security_id: 1}
+        - {trade_date: "2020-01-09", security_id: 1}
+        - {trade_date: "2020-01-03", security_id: 2}
+        - {trade_date: "2020-01-06", security_id: 2}
+        - {trade_date: "2020-01-09", security_id: 2}
+
+  - name: test_features_use_only_what_was_known_that_day
+    description: >
+      Fundamentals for security 1 become available on 2023-05-01, so
+      2023-04-28 has no fundamentals. On 2023-05-01: market cap 30 * 10 = 300,
+      P/E 300 / 20 = 15, P/B 300 / 50 = 6, D/E 50 / 50 = 1. Security 2 has
+      negative equity and a loss, so P/E and P/B are null.
+    model: fct_features_daily
+    given:
+      - input: ref('fct_universe_daily')
+        rows:
+          - {trade_date: "2023-04-28", security_id: 1}
+          - {trade_date: "2023-05-01", security_id: 1}
+          - {trade_date: "2023-05-01", security_id: 2}
+      - input: ref('fct_prices_daily')
+        rows:
+          - {security_id: 1, trade_date: "2023-04-28", close: 29}
+          - {security_id: 1, trade_date: "2023-05-01", close: 30}
+          - {security_id: 2, trade_date: "2023-05-01", close: 5}
+      - input: ref('int_fundamentals__snapshot_events')
+        rows:
+          - {security_id: 1, metric: total_liabilities, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {security_id: 1, metric: stockholders_equity, event_date: "2023-05-01", period_end: "2023-03-31", value: 50, available_date: "2023-05-01"}
+          - {security_id: 1, metric: shares_outstanding, event_date: "2023-05-01", period_end: "2023-04-20", value: 10, available_date: "2023-05-01"}
+          - {security_id: 2, metric: stockholders_equity, event_date: "2023-02-01", period_end: "2022-12-31", value: -4, available_date: "2023-02-01"}
+          - {security_id: 2, metric: total_liabilities, event_date: "2023-02-01", period_end: "2022-12-31", value: 8, available_date: "2023-02-01"}
+          - {security_id: 2, metric: shares_outstanding, event_date: "2023-02-01", period_end: "2023-01-20", value: 2, available_date: "2023-02-01"}
+      - input: ref('int_fundamentals__ttm_events')
+        rows:
+          - {security_id: 1, metric: net_income_ttm, event_date: "2023-05-01", period_end: "2023-03-31", value: 20, source_available_date: "2023-05-01"}
+          - {security_id: 2, metric: net_income_ttm, event_date: "2023-02-01", period_end: "2022-12-31", value: -1, source_available_date: "2023-02-01"}
+    expect:
+      rows:
+        - {trade_date: "2023-04-28", security_id: 1, close: 29, market_cap: null, pe_ttm: null, pb: null, debt_to_equity: null, stockholders_equity_source_available_date: null}
+        - {trade_date: "2023-05-01", security_id: 1, close: 30, market_cap: 300, pe_ttm: 15, pb: 6, debt_to_equity: 1, stockholders_equity_source_available_date: "2023-05-01"}
+        - {trade_date: "2023-05-01", security_id: 2, close: 5, market_cap: 10, pe_ttm: null, pb: null, debt_to_equity: -2, stockholders_equity_source_available_date: "2023-02-01"}

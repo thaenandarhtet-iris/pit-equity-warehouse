@@ -1,0 +1,171 @@
+version: 2
+
+models:
+  - name: int_filings__availability
+    description: >
+      When each filing became usable. available_ts is the SEC acceptance time
+      (UTC); available_date is the first trading session whose 09:30 ET open is
+      strictly after it. See docs/decisions.md for why the rule is conservative.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [cik, accession_number]
+    columns:
+      - name: available_ts
+        data_tests: [not_null]
+      - name: available_date
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_calendar__sessions')
+                field: session_date
+
+  - name: int_facts__mapped
+    description: >
+      Facts for concept-map metrics, one row per (company, metric, period,
+      filing), using the best tag within that filing. Durations are classified
+      as quarter, 6- or 9-month year-to-date, or fiscal year.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [security_id, metric, period_start, period_end, accession_number]
+    columns:
+      - name: metric
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [revenue, net_income, eps_diluted, total_assets, total_liabilities, stockholders_equity, shares_outstanding]
+      - name: period_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [duration, instant]
+      - name: duration_class
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [instant, quarter, ytd_6m, ytd_9m, fiscal_year]
+      - name: available_date
+        data_tests: [not_null]
+
+unit_tests:
+  - name: test_availability_rolls_to_the_next_open
+    model: int_filings__availability
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: 2023-06-30, market_open_utc: "2023-06-30 13:30:00"}
+          # Half day before the July 4 holiday.
+          - {session_date: 2023-07-03, market_open_utc: "2023-07-03 13:30:00"}
+          - {session_date: 2023-07-05, market_open_utc: "2023-07-05 13:30:00"}
+          - {session_date: 2023-07-06, market_open_utc: "2023-07-06 13:30:00"}
+          # Standard time, then daylight time from Sunday 2024-03-10.
+          - {session_date: 2024-03-08, market_open_utc: "2024-03-08 14:30:00"}
+          - {session_date: 2024-03-11, market_open_utc: "2024-03-11 13:30:00"}
+          - {session_date: 2024-03-12, market_open_utc: "2024-03-12 13:30:00"}
+      - input: ref('stg_universe__filers')
+        rows:
+          - {security_id: 1, cik: 1, valid_from: null, valid_to: null}
+      - input: ref('stg_sec__filings')
+        rows:
+          - {cik: 1, accession_number: after-close, form: 10-Q, accepted_at_utc: "2023-07-05 20:05:00"}
+          - {cik: 1, accession_number: pre-open, form: 10-Q, accepted_at_utc: "2023-07-06 12:00:00"}
+          - {cik: 1, accession_number: friday-after-close, form: 10-Q, accepted_at_utc: "2023-06-30 20:30:00"}
+          - {cik: 1, accession_number: holiday, form: 10-K, accepted_at_utc: "2023-07-03 18:00:00"}
+          - {cik: 1, accession_number: at-open, form: 10-Q, accepted_at_utc: "2024-03-11 13:30:00"}
+          - {cik: 1, accession_number: pre-open-standard-time, form: 10-Q, accepted_at_utc: "2024-03-08 14:00:00"}
+          - {cik: 1, accession_number: before-calendar, form: 10-K, accepted_at_utc: "2013-05-01 20:00:00"}
+    expect:
+      rows:
+        - {accession_number: after-close, available_date: 2023-07-06}
+        - {accession_number: pre-open, available_date: 2023-07-06}
+        - {accession_number: friday-after-close, available_date: 2023-07-03}
+        - {accession_number: holiday, available_date: 2023-07-05}
+        # The rule is "strictly after", so a filing stamped at the open waits a day.
+        - {accession_number: at-open, available_date: 2024-03-12}
+        - {accession_number: pre-open-standard-time, available_date: 2024-03-08}
+        # Known before the calendar starts, so usable from its first session.
+        - {accession_number: before-calendar, available_date: 2023-06-30}
+
+  - name: test_each_filer_counts_only_while_it_reports_for_the_security
+    description: >
+      Security 20 was filed for by CIK 10 until a reorganization on
+      2019-07-31, then by CIK 20. CIK 10 keeps filing as a subsidiary, and
+      those later filings must not count. CIK 99 is not a sampled filer.
+    model: int_filings__availability
+    given:
+      - input: ref('stg_calendar__sessions')
+        rows:
+          - {session_date: 2019-05-02, market_open_utc: "2019-05-02 13:30:00"}
+          - {session_date: 2019-08-01, market_open_utc: "2019-08-01 13:30:00"}
+          - {session_date: 2019-11-01, market_open_utc: "2019-11-01 13:30:00"}
+      - input: ref('stg_universe__filers')
+        rows:
+          - {security_id: 20, cik: 10, valid_from: null, valid_to: 2019-07-31}
+          - {security_id: 20, cik: 20, valid_from: 2019-07-31, valid_to: null}
+      - input: ref('stg_sec__filings')
+        rows:
+          - {cik: 10, accession_number: old-q1, form: 10-Q, accepted_at_utc: "2019-05-01 20:00:00"}
+          - {cik: 10, accession_number: old-q2-as-subsidiary, form: 10-Q, accepted_at_utc: "2019-08-01 20:00:00"}
+          - {cik: 20, accession_number: new-q2, form: 10-Q, accepted_at_utc: "2019-07-31 20:00:00"}
+          - {cik: 20, accession_number: new-q3, form: 10-Q, accepted_at_utc: "2019-10-31 20:00:00"}
+          - {cik: 99, accession_number: unrelated, form: 10-Q, accepted_at_utc: "2019-10-31 20:00:00"}
+    expect:
+      rows:
+        - {security_id: 20, cik: 10, accession_number: old-q1, available_date: 2019-05-02}
+        - {security_id: 20, cik: 20, accession_number: new-q2, available_date: 2019-08-01}
+        - {security_id: 20, cik: 20, accession_number: new-q3, available_date: 2019-11-01}
+
+  - name: test_best_tag_is_chosen_within_each_filing
+    model: int_facts__mapped
+    given:
+      - input: ref('concept_map')
+        rows:
+          - {metric: revenue, taxonomy: us-gaap, tag: Revenues, priority: 1, period_type: duration, unit: USD}
+          - {metric: revenue, taxonomy: us-gaap, tag: SalesRevenueNet, priority: 3, period_type: duration, unit: USD}
+          - {metric: total_assets, taxonomy: us-gaap, tag: Assets, priority: 1, period_type: instant, unit: USD}
+      - input: ref('int_filings__availability')
+        rows:
+          - {security_id: 1, cik: 1, accession_number: q3-10q, available_ts: "2017-11-01 20:00:00", available_date: 2017-11-02}
+          - {security_id: 1, cik: 1, accession_number: fy18-10k, available_ts: "2018-11-02 20:00:00", available_date: 2018-11-05}
+      - input: ref('stg_sec__facts')
+        rows:
+          # The original 10-Q tags the quarter both ways; the higher priority wins.
+          - {cik: 1, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 100, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+          - {cik: 1, taxonomy: us-gaap, tag: SalesRevenueNet, unit: USD, value: 99, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+          # A later filing re-reports the quarter under a lower-priority tag. It is a
+          # separate version and must not replace the original.
+          - {cik: 1, taxonomy: us-gaap, tag: SalesRevenueNet, unit: USD, value: 101, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: fy18-10k, form: 10-K}
+          # Wrong unit for the metric: dropped.
+          - {cik: 1, taxonomy: us-gaap, tag: Revenues, unit: EUR, value: 90, period_start: 2017-07-02, period_end: 2017-09-30, accession_number: fy18-10k, form: 10-K}
+          - {cik: 1, taxonomy: us-gaap, tag: Assets, unit: USD, value: 500, period_start: null, period_end: 2017-09-30, accession_number: q3-10q, form: 10-Q}
+    expect:
+      rows:
+        - {metric: revenue, tag: Revenues, value: 100, accession_number: q3-10q, duration_class: quarter}
+        - {metric: revenue, tag: SalesRevenueNet, value: 101, accession_number: fy18-10k, duration_class: quarter}
+        - {metric: total_assets, tag: Assets, value: 500, accession_number: q3-10q, duration_class: instant}
+
+  - name: test_a_period_reported_in_two_contexts_keeps_the_full_span
+    model: int_facts__mapped
+    description: >
+      J.B. Hunt's 10-Q of 2014-07-29 tags Q2 2013 revenue twice: 1,382,858,000
+      for 2013-04-01 to 2013-06-30 and a rounded 1,383,000,000 for a context
+      starting 2013-04-04. One quarter gets one value per filing: the full span.
+    given:
+      - input: ref('concept_map')
+        rows:
+          - {metric: revenue, taxonomy: us-gaap, tag: Revenues, priority: 1, period_type: duration, unit: USD}
+      - input: ref('int_filings__availability')
+        rows:
+          - {security_id: 728535, cik: 728535, accession_number: 0001437749-14-013566, available_ts: "2014-07-29 18:00:07", available_date: 2014-07-30}
+      - input: ref('stg_sec__facts')
+        rows:
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 1383000000, period_start: 2013-04-04, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 1382858000, period_start: 2013-04-01, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+          - {cik: 728535, taxonomy: us-gaap, tag: Revenues, unit: USD, value: 2674444000, period_start: 2013-01-01, period_end: 2013-06-30, accession_number: 0001437749-14-013566, form: 10-Q}
+    expect:
+      rows:
+        - {period_start: 2013-04-01, value: 1382858000, duration_class: quarter}
+        - {period_start: 2013-01-01, value: 2674444000, duration_class: ytd_6m}

@@ -1,0 +1,6 @@
+security_id,ticker,start_date,end_date,resolution
+320193,AAPL,1996-01-02,,fixture
+1637459,KHC,2015-07-06,,fixture
+789019,MSFT,1996-01-02,,fixture
+1045810,NVDA,2001-11-30,,fixture
+1418091,TWTR,2018-06-07,2022-11-01,fixture

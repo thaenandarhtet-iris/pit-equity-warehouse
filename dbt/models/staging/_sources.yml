@@ -1,0 +1,35 @@
+version: 2
+
+# Landing tables written by the pitwh CLI. PARQUET_DIR is absolute (set by the
+# Makefile and CI) for the same reason DUCKDB_PATH is.
+sources:
+  - name: sec
+    meta:
+      external_location: "{{ env_var('PARQUET_DIR') }}/{name}.parquet"
+    tables:
+      - name: sec_facts
+        description: One row per XBRL fact for concept-map tags, as reported in companyfacts.
+      - name: sec_filings
+        description: One row per filing from the submissions endpoint, overflow files included.
+      - name: sec_companies
+        description: One row per company in the SEC cache.
+
+  - name: universe
+    meta:
+      external_location: "{{ env_var('PARQUET_DIR') }}/{name}.parquet"
+    tables:
+      - name: universe_membership
+        description: One row per (security, ticker interval) in the sample, from build-universe.
+      - name: universe_securities
+        description: One row per sampled security with its Tiingo price symbol.
+      - name: universe_filers
+        description: >
+          Which SEC filer (CIK) reports for each security, and over which
+          acceptance dates. Most securities are their own only filer.
+
+  - name: tiingo
+    meta:
+      external_location: "{{ env_var('PARQUET_DIR') }}/{name}.parquet"
+    tables:
+      - name: prices_daily
+        description: One row per (Tiingo symbol, session) with raw OHLCV, dividend and split factor.
